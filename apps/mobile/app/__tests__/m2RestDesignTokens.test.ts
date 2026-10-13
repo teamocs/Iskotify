@@ -117,7 +117,6 @@ const P4_FILES = [
   'components/walkthrough/TourControls.tsx',
   'components/walkthrough/TourVisuals.tsx',
   'components/web/SidebarNav.tsx',
-  'components/SessionPausedOverlay.tsx',
   'components/SyncErrorBanner.tsx',
   'components/WebSetupOverlay.tsx',
   'components/TargetCoursesCard.tsx',

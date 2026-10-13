@@ -101,7 +101,7 @@ function BackButton({ label = 'Back' }: { label?: string }) {
         const { pressed, focused } = state as WebPressableState
         return [
           {
-            width: 44, height: 44, minWidth: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+            width: 44, height: 44, minWidth: 44, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center',
             backgroundColor: pressed ? t.surface2 : 'transparent', marginLeft: -spacing.sm,
           },
           focusRing(t.focusRing, focused),
@@ -122,7 +122,7 @@ function Panel({ children, tone = 'neutral' }: { children: React.ReactNode; tone
         backgroundColor: tone === 'warning' ? t.warningSurface : t.surface,
         borderWidth: 1,
         borderColor: tone === 'warning' ? t.warningBorder : t.border,
-        borderRadius: radius.lg,
+        borderRadius: radius.group,
         borderCurve: 'continuous',
         padding: spacing.lg,
         gap: spacing.xs,
@@ -167,7 +167,7 @@ function ReviewAccordion({ reviewSections, questions, answers, initiallyExpanded
             key={sec.sectionName}
             style={{
               backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-              borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden',
+              borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden',
             }}
           >
             <Pressable
@@ -744,9 +744,9 @@ export default function BlueprintExam() {
             <Skeleton width={72} height={40} />
             <Skeleton width={72} height={40} />
           </View>
-          <Skeleton height={56} radius={radius.lg} />
-          <Skeleton height={56} radius={radius.lg} />
-          <Skeleton height={56} radius={radius.lg} />
+          <Skeleton height={56} radius={radius.group} />
+          <Skeleton height={56} radius={radius.group} />
+          <Skeleton height={56} radius={radius.group} />
         </View>
       </Screen>
     )
@@ -823,7 +823,7 @@ export default function BlueprintExam() {
 
           <View>
             <SectionHeader title="Structure" />
-            <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
+            <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.group, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
               {[...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder).map((sec, i) => {
                 const builtSec = built.runnable.find(b => b.section.id === sec.id)
                 const live = !!builtSec

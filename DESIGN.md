@@ -233,7 +233,7 @@ Reach tokens through `useTheme()`:
 ```tsx
 const { theme: t } = useTheme()
 const s = useMemo(() => StyleSheet.create({
-  label: { color: t.textSecondary, ...textStyle('bodySm', t.textSecondary) },
+  label: { ...iosTextStyle('footnote', t.textSecondary) },
 }), [t])
 ```
 
@@ -275,103 +275,30 @@ every screen through `useTheme()`.
 
 **One palette**: the app is light-only regardless of the phone's setting — `app.json` sets `userInterfaceStyle: "light"`, the status bar is dark-on-light, and the web build declares `color-scheme: light`. Do not add a dark variant (owner decision, 2026-09).
 
-#### Type roles and the `textStyle()` helper
+#### Type roles: `<Text role>` and `iosTextStyle()`
 
-Type scale bottoms out at **12pt** (`xs`) — nothing below that is readable.
+The iOS text roles (Apple HIG sizes at the default content size). The floor is **12pt**.
 
-| Role | Size | Font | Line height | Use case |
-|---|---|---|---|---|
-| `display` | 48 | Heading Bold | 54 | Largest hero text (rare) |
-| `title` | 26 | Heading Bold | 32 | Section titles |
-| `headline` | 20 | Heading Bold | 26 | Card titles, list headers |
-| `titleSm` | 17 | Heading SemiBold | 22 | Small card titles |
-| `body` | 16 | Body Regular | 24 | Primary reading text |
-| `bodySm` | 13 | Body Regular | 19 | Secondary text, descriptions |
-| `label` | 13 | Body SemiBold | 18 | Form labels, button-adjacent text |
-| `button` | 16 | Heading Bold | 20 | Button labels |
-| `caption` | 12 | Body Regular | 16 | Badges, hints, metadata |
-| `numeric` | 22 | Heading Bold | 28 | Tabular numbers (scores, counters) |
-| `numericLg` | 36 | Heading Bold | 42 | Large tabular numbers (exams, times) |
-
-Use via `textStyle(role)` or `textStyle(role, color)` to get a TextStyle with optional colour:
+| Role | Size / line | Weight | Use case |
+|---|---|---|---|
+| `largeTitle` | 34/41 | 700 | Page titles (the h1) |
+| `title1` | 28/34 | 700 | Big section or dialog titles |
+| `title2` | 22/28 | 700 | Section titles |
+| `title3` | 20/25 | 600 | Card titles, sub-headings |
+| `headline` | 17/22 | 600 | Row titles, button labels |
+| `body` | 17/22 | 400 | Reading text |
+| `callout` | 16/21 | 400 | Supporting text |
+| `subheadline` | 15/20 | 400 | Secondary lines, row subtitles |
+| `footnote` | 13/18 | 400 | Captions under groups, hints (600 for a label) |
+| `caption` | 12/16 | 400 | Badges, metadata |
+| `numeric` / `numericLg` | 22/28, 34/41 | 700 | Tabular numbers (scores, timers) |
 
 ```tsx
-<Text style={textStyle('body', t.textPrimary)} numberOfLines={1}>
-  Your primary text
-</Text>
+<Text role="body" color={t.textSecondary}>Your primary text</Text>
+<Text style={[iosTextStyle('footnote', t.textSecondary), weight('600')]}>Label</Text>
 ```
 
-Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack on web), set by the theme roles (`textStyle` / `iosTextStyle` / `<Text role>`) via `systemFont` in `theme/tokens.ts`. Outfit and Lexend are no longer loaded on mobile (iOS redesign P1b); nothing loads before first paint. Weight bumps on top of a role use `weight()`; never set a literal `fontFamily` (guarded by `__tests__/noBrandFonts.test.ts`). Admin and the landing page keep Outfit/Lexend for now.
-
-#### Spacing and radius
-
-**4/8 spacing rhythm** (all in pt):
-
-| Token | Value | Usage |
-|---|---|---|
-| `xs` | 4 | Tight gaps (icon + text) |
-| `sm` | 8 | Default gap between elements |
-| `md` | 12 | Medium padding inside components |
-| `lg` | 16 | Card padding, small gutter |
-| `xl` | 20 | Section spacing |
-| `xxl` | 24 | Large sections, between folds |
-| `xxxl` | 32 | Full-height spacing, layout gaps |
-
-**Radii** (pair with `borderCurve: 'continuous'` except pills/capsules; `components/ui/__tests__/continuousCorners.test.ts` guards the primitives). The iOS shape scale (P1c/P3):
-
-| Token | Value | Usage |
-|---|---|---|
-| `chip` | 8 | Static chips, icon tiles, small badges and squares |
-| `field` | 12 | Text fields, search, banners, small panels |
-| `button` | 14 | Buttons |
-| `group` | 18 | Inset grouped lists (`InsetGroup`) |
-| `card` | 22 | Cards |
-| `sheet` | 28 | Sheets and dialogs (in-place and routed) |
-| `heroSheet` | 36 | The sign-in sheet over the maroon hero (canvas "Sign in"), on `glass.sheetFill` (the ground at 80%, frosted on web) |
-| `capsule` | 999 | Pills, segmented control, filter chips, round buttons |
-
-`sm` (10) was split into `chip`/`field` and removed. The legacy `md`/`lg`/`xl`/`xxl`/`pill` keys remain as aliases (14/18/22/28/999) until the P4 screen migrations finish.
-
-### Responsive layout
-
-Three window-size breakpoints (Material 3):
-- **compact** < 600 (phones, portrait tablets)
-- **medium** 600–1023 (landscape tablets)
-- **expanded** ≥ 1024 (desktop web, landscape large tablets)
-
-Use `useBreakpoint()` to get the current class; `breakpointForWidth(width)` for pure mapping.
-
-#### Layout dimensions
-
-**Gutters** (horizontal page padding, responsive):
-- compact: 16 (spacing.lg)
-- medium: 24 (spacing.xxl)
-- expanded: 32 (spacing.xxxl)
-
-**Content max-widths**:
-- `reading` — 720 (single-column, readable prose measure)
-- `wide` — 1040 (two-column dashboards, grid-heavy screens)
-
-**Tab bar**: a floating glass capsule, 62pt tall, 16pt from each side, 26pt above the bottom safe-area inset. Screens using tabs reserve `layout.capsuleClearance` (104pt = 62 + 26 + 16 gap) plus the inset (`Screen tabBarInset`, `ScreenScroll`, Explore's grids, `AnalyticsDashboard`). `layout.tabBarClearance` is retired from screens.
-
-#### Layout primitives
-
-| Component | Purpose | Breakpoint handling |
-|---|---|---|
-| `<Screen>` | Safe area + themed ground + responsive gutter + centered content column (non-scrolling) | Accepts `width="reading"` or `"wide"` |
-| `<ScreenScroll>` | Scrolling variant; wraps children at a max-width on web medium/expanded | Same width control; handles tab bar clearance |
-| `<TwoColumn primary secondary>` | Side-by-side on expanded (3:2 flex ratio); stacked on compact/medium | Uses `columnCount(bp)` to decide layout |
-
-Example responsive screen:
-
-```tsx
-<Screen width="wide" tabBarInset>
-  <TwoColumn
-    primary={<PrimaryPanel />}
-    secondary={<SecondaryPanel />}
-  />
-</Screen>
-```
+The legacy `textStyle()` API (display, title, titleSm, bodySm, label, button…) was retired in the final P4 PR. Six aliases (`title`, `headline`, `titleSm`, `body`, `bodySm`, `caption`) remain, deprecated, only for the owner-frozen `app/landing.tsx`; `typography` / `typo` are gone. `__tests__/iosLanguageComplete.test.ts` keeps them out of every other file.
 
 ### Primitives catalogue
 
@@ -455,16 +382,17 @@ Status scores (progress, accuracy, rankings) use **neutral colours** (`surface` 
 
 One guard per redesigned area:
 - `apps/mobile/app/(tabs)/__tests__/m2DesignTokens.test.ts` — Today, Progress, Profile; since the iOS P4 Today PR also no legacy role names (`textStyle`, `typo`, `titleSm`, `bodySm`…) and no fixed `height:` anywhere in `components/home`, and no `typo.*` / `fontSize` in `components/calendar`. The one allowed uppercase is Today's date eyebrow (owner spec, 2026-10-13).
+- `apps/mobile/__tests__/englishOnly.test.ts` — English only (brandbook §6): no Taglish ("Tara… natin", "Kaya mo", "Tapos na", "Salamat"…) anywhere in app/, components/, utils/, services/ and hooks/, outside the tagline and the frozen landing page
 - `apps/mobile/__tests__/noScareCopy.test.ts` — app-wide voice (brandbook §5–6): no "behind" as status text, no "only N … left" or "N days left" (outside an allowlisted neutral label), no emoji in `app/`, `components/`, `utils/`, `services/` (notifications) and `hooks/`
 - `apps/mobile/components/explore/__tests__/designLint.test.ts` — Explore, listings, schools, career
 - `apps/mobile/components/practice/__tests__/practiceAreaTokens.test.ts` — Practice, exam runner, results, notes, estimator
 - `apps/mobile/app/__tests__/m2RestDesignTokens.test.ts` — first run, auth, settings and info pages; since the iOS P4 remaining-screens PR also onboarding, sign-in, the guest diagnostic, consent, the tour, subject detail, the overlays and the primitives they use: no legacy type API or retired role names, no legacy radius keys, no raw `Modal` (the Sheet primitive aside) and no fixed `height:` on a text container
-- `apps/mobile/__tests__/iosLanguageComplete.test.ts` — repo-wide (app/, components/, hooks/): no `textStyle()` or retired role name, no `typo.`/`typography.`, no `fontSize:` literal, no `Modal` imported from react-native, and no readiness/accuracy/score badge whose tone follows its value, outside a printed allowlist (the files of still-open PRs, the landing page, and the full-screen passage reader, figure zoom and estimator disclaimer). The allowlist only shrinks
+- `apps/mobile/__tests__/iosLanguageComplete.test.ts` — repo-wide (app/, components/, hooks/): no `textStyle()` or retired role name, no `typo.`/`typography.`, no `fontSize:` literal, no `Modal` imported from react-native, and no readiness/accuracy/score badge whose tone follows its value, no legacy radius alias and no fixed `height:` on a text container, outside a printed five-entry allowlist (the frozen landing page; the Sheet primitive, passage reader, figure zoom and estimator disclaimer for Modal only). The allowlist never grows
 - `apps/mobile/app/__tests__/m3AppScreensDesign.test.ts` — M3: practice choosers and runners, notes, subjects, estimator, requirements, scholarship profile, results tracker and their shared components; also requires every listed screen to lay out through `Screen` / `TwoColumn` / `useBreakpoint`, and every tab's web refresh control to be icon-only on phones
 
 Each enforces the same rules on the files it scans:
 - No raw hex colours (`#rrggbb`) or `rgba()` literals — all colours from `useTheme()` tokens
-- No hand-set `fontSize` — all type from `textStyle(role)` roles
+- No hand-set `fontSize` — all type from the iOS roles (`<Text role>` / `iosTextStyle()`)
 - No uppercase via `.toUpperCase()` or CSS `text-transform: uppercase` (sentence case only)
 - No emoji or Unicode icon glyphs (›, ‹, ▲, ▼, ✕, ✓, ＋, ↪, ⚠) — use Lineicons only
 

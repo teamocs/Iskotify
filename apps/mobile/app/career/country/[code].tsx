@@ -139,8 +139,8 @@ export default function CareerCountryScreen() {
           {status === 'loading' ? (
             <View accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
               <Skeleton width="60%" height={28} />
-              <Skeleton height={120} radius={radius.xl} />
-              <Skeleton height={180} radius={radius.xl} />
+              <Skeleton height={120} radius={radius.card} />
+              <Skeleton height={180} radius={radius.card} />
             </View>
           ) : status === 'error' ? (
             <ErrorState title="Couldn't load this country" onRetry={() => setAttempt(a => a + 1)} />

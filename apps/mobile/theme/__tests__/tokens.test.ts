@@ -67,33 +67,33 @@ describe('theme tokens', () => {
 })
 
 describe('type scale tokens', () => {
-  const roles = Object.keys(textStyles) as (keyof typeof textStyles)[]
+  const roles = Object.keys(iosTextStyles) as (keyof typeof iosTextStyles)[]
 
   it('defines the roles the redesign uses', () => {
     expect(roles).toEqual(expect.arrayContaining([
-      'display', 'title', 'headline', 'titleSm', 'body', 'bodySm',
-      'label', 'button', 'caption', 'numeric', 'numericLg',
+      'largeTitle', 'title1', 'title2', 'title3', 'headline', 'body',
+      'callout', 'subheadline', 'footnote', 'caption', 'numeric', 'numericLg',
     ]))
   })
 
   it.each(roles)('%s respects the 12pt floor and has a line height ≥ its size', (role) => {
-    const s = textStyles[role]
+    const s = iosTextStyles[role]
     expect(s.fontSize).toBeGreaterThanOrEqual(12)
     expect(s.lineHeight).toBeGreaterThanOrEqual(s.fontSize)
   })
 
   it('only draws sizes from the iOS type scale', () => {
-    for (const role of roles) expect(iosTypeScale).toContain(textStyles[role].fontSize)
+    for (const role of roles) expect(iosTypeScale).toContain(iosTextStyles[role].fontSize)
   })
 
   it('numeric roles use tabular figures so timers and scores do not jitter', () => {
-    expect(textStyles.numeric.fontVariant).toEqual(['tabular-nums'])
-    expect(textStyles.numericLg.fontVariant).toEqual(['tabular-nums'])
+    expect(iosTextStyles.numeric.fontVariant).toEqual(['tabular-nums'])
+    expect(iosTextStyles.numericLg.fontVariant).toEqual(['tabular-nums'])
   })
 
   it('never tracks tighter than -0.04em', () => {
     for (const role of roles) {
-      const s = textStyles[role] as { fontSize: number; letterSpacing?: number }
+      const s = iosTextStyles[role] as { fontSize: number; letterSpacing?: number }
       const ls = s.letterSpacing ?? 0
       expect(ls / s.fontSize).toBeGreaterThanOrEqual(-0.04)
     }
@@ -101,19 +101,19 @@ describe('type scale tokens', () => {
 
   it('textStyle() returns the role and merges a colour when given', () => {
     expect(textStyle('body')).toEqual(textStyles.body)
-    expect(textStyle('label', '#123456')).toEqual({ ...textStyles.label, color: '#123456' })
+    expect(textStyle('bodySm', '#123456')).toEqual({ ...textStyles.bodySm, color: '#123456' })
   })
 
   // P1b: Outfit/Lexend are retired; every role is the platform UI font.
   it('uses the system font on native (fontFamily undefined) and the system stack on web', () => {
     // jest-expo renders as iOS.
-    for (const role of roles) expect(textStyles[role].fontFamily).toBeUndefined()
+    for (const role of roles) expect(iosTextStyles[role].fontFamily).toBeUndefined()
     expect(systemFontFor('web')).toMatch(/^-apple-system, BlinkMacSystemFont/)
     expect(systemFontFor('web')).not.toMatch(/Outfit|Lexend/)
   })
 
   it.each(roles)('%s carries an explicit fontWeight', (role) => {
-    expect(textStyles[role].fontWeight).toMatch(/^[1-9]00$/)
+    expect(iosTextStyles[role].fontWeight).toMatch(/^[1-9]00$/)
   })
 
   it('weight() gives the system font at a weight (temporary, replaces fonts.*)', () => {
@@ -185,12 +185,16 @@ describe('iOS text roles', () => {
     expect(iosTextStyle('footnote', '#123456')).toEqual({ ...iosTextStyles.footnote, color: '#123456' })
   })
 
-  it('maps every legacy role onto an iOS role for the P1b cut-over', () => {
+  // Final P4: only the six roles the owner-frozen landing page still uses
+  // remain; display, label, button, numeric and numericLg are gone.
+  it('keeps only the legacy roles the frozen landing page uses', () => {
     expect(legacyTextRoleMap).toEqual({
-      display: 'largeTitle', title: 'title1', headline: 'title3', titleSm: 'headline',
-      body: 'body', bodySm: 'footnote', label: 'footnote', button: 'headline',
-      caption: 'caption', numeric: 'numeric', numericLg: 'numericLg',
+      title: 'title1', headline: 'title3', titleSm: 'headline',
+      body: 'body', bodySm: 'footnote', caption: 'caption',
     })
+    for (const gone of ['display', 'label', 'button', 'numeric', 'numericLg']) {
+      expect(textStyles).not.toHaveProperty(gone)
+    }
     for (const legacy of Object.keys(textStyles) as (keyof typeof legacyTextRoleMap)[]) {
       expect(iosTextStyles).toHaveProperty(legacyTextRoleMap[legacy])
     }
@@ -204,9 +208,6 @@ describe('iOS text roles', () => {
     }
     expect(textStyles.body).toEqual(iosTextStyles.body)
     expect(textStyles.bodySm).toEqual(iosTextStyles.footnote)
-    expect(textStyles.label).toEqual({ ...iosTextStyles.footnote, fontWeight: '600' })
-    expect(textStyles.numeric).toEqual({ ...iosTextStyles.title2, fontVariant: ['tabular-nums'] })
-    expect(textStyles.numericLg).toEqual({ ...iosTextStyles.largeTitle, fontVariant: ['tabular-nums'] })
   })
 })
 
@@ -222,9 +223,10 @@ describe('radius tokens', () => {
     expect(radius.heroSheet).toBe(36)
   })
 
-  it('keeps the old keys as aliases with their old values', () => {
-    expect({ md: radius.md, lg: radius.lg, xl: radius.xl, xxl: radius.xxl, pill: radius.pill })
-      .toEqual({ md: 14, lg: 18, xl: 22, xxl: 28, pill: 999 })
+  // Final P4: the legacy aliases are gone; `md` stays for the frozen landing page.
+  it('drops the legacy radius aliases, keeping md (14, = button) for the landing page', () => {
+    for (const gone of ['lg', 'xl', 'xxl', 'pill']) expect(radius).not.toHaveProperty(gone)
+    expect(radius.md).toBe(radius.button)
   })
 
   it('has split sm into chip and field (P1c): no sm key remains', () => {

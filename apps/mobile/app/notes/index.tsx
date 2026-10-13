@@ -257,7 +257,7 @@ export default function NotesScreen() {
               return [
                 {
                   position: 'absolute', right: spacing.xl, bottom: insets.bottom + spacing.xl,
-                  width: 56, height: 56, borderRadius: radius.pill,
+                  width: 56, height: 56, borderRadius: radius.capsule,
                   alignItems: 'center', justifyContent: 'center',
                   backgroundColor: pressed ? t.accentPressed : t.accent,
                   boxShadow: t.shadowMd,

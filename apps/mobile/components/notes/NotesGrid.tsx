@@ -60,8 +60,8 @@ export function NotesSkeleton() {
     <View accessible accessibilityLabel="Loading notes" aria-busy style={{ flexDirection: 'row', gap: spacing.md }}>
       {Array.from({ length: n }, (_, i) => (
         <View key={i} style={{ flex: 1, gap: spacing.md }}>
-          <Skeleton height={i % 2 ? 96 : 140} radius={radius.lg} />
-          <Skeleton height={i % 2 ? 140 : 96} radius={radius.lg} />
+          <Skeleton height={i % 2 ? 96 : 140} radius={radius.group} />
+          <Skeleton height={i % 2 ? 140 : 96} radius={radius.group} />
         </View>
       ))}
     </View>

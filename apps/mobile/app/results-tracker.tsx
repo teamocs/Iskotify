@@ -137,8 +137,8 @@ export default function ResultsTrackerScreen() {
       <View style={{ gap: spacing.md }}>
         {status === 'loading' ? (
           <View testID="results-skeleton" accessible accessibilityLabel="Loading tracked results" aria-busy style={{ gap: spacing.md }}>
-            <Skeleton height={140} radius={radius.xl} />
-            <Skeleton height={140} radius={radius.xl} />
+            <Skeleton height={140} radius={radius.card} />
+            <Skeleton height={140} radius={radius.card} />
           </View>
         ) : status === 'error' ? (
           <ErrorState title="Couldn't load your tracked results" onRetry={() => { setStatus('loading'); void load() }} />

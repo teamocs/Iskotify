@@ -47,7 +47,7 @@ export function RunnerReview({ items, answers, expandAll = false }: Props) {
               key={sec.sectionName}
               style={{
                 backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-                borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden',
+                borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden',
               }}
             >
               <Pressable

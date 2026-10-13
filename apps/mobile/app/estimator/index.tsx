@@ -67,7 +67,7 @@ function RangeBar({ point, low, high, t }: { point: number; low: number; high: n
       <View
         {...decorative}
         style={{
-          height: 12, backgroundColor: t.surface2, borderRadius: radius.pill,
+          minHeight: 12, backgroundColor: t.surface2, borderRadius: radius.capsule,
           marginTop: spacing.sm, overflow: 'hidden',
         }}
       >
@@ -115,9 +115,9 @@ export default function EstimatorScreen() {
     if (status === 'loading') {
       return (
         <View accessible accessibilityLabel="Loading your estimate" aria-busy style={{ gap: spacing.md }}>
-          <Skeleton height={140} radius={radius.xl} />
-          <Skeleton height={96} radius={radius.xl} />
-          <Skeleton height={96} radius={radius.xl} />
+          <Skeleton height={140} radius={radius.card} />
+          <Skeleton height={96} radius={radius.card} />
+          <Skeleton height={96} radius={radius.card} />
         </View>
       )
     }

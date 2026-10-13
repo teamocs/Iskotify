@@ -2,6 +2,7 @@
 // react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image, Platform, ScrollView, Text, View, type ViewStyle } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { StatusBar } from 'expo-status-bar'
 import { useTheme } from '../../theme/ThemeContext'
 import { glass, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { useBreakpoint, pagePadding } from '../../hooks/useBreakpoint'
@@ -167,7 +168,9 @@ export function AuthHeroLayout({ children }: { children: React.ReactNode }) {
   }
   const gutter = spacing.md
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.accent }}>
+    <SafeAreaView testID="auth-hero" style={{ flex: 1, backgroundColor: t.accent }}>
+      {/* Light status-bar icons over the maroon hero (the app default is dark). */}
+      <StatusBar style="light" />
       <KeyboardShell>
         <View style={{ flex: 1 }}>
           <HeroShapes />

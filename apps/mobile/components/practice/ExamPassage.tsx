@@ -23,7 +23,7 @@ export function ExamPassage({ passage }: { passage: string }) {
   const control = (pressed: boolean, focused?: boolean) => [
     {
       minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.xs,
-      paddingHorizontal: spacing.md, borderRadius: radius.pill,
+      paddingHorizontal: spacing.md, borderRadius: radius.capsule,
       backgroundColor: pressed ? t.surface2 : 'transparent',
     },
     focusRing(t.focusRing, focused),
@@ -102,7 +102,7 @@ export function ExamPassage({ passage }: { passage: string }) {
               style={(s) => {
                 const { pressed, focused } = s as WebPressableState
                 return [
-                  { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
+                  { width: 44, height: 44, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
                   focusRing(t.focusRing, focused),
                 ]
               }}

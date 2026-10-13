@@ -277,8 +277,8 @@ export default function CourseCareerDetailScreen() {
           {status === 'loading' ? (
             <View accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
               <Skeleton width="75%" height={28} />
-              <Skeleton height={140} radius={radius.xl} />
-              <Skeleton height={120} radius={radius.xl} />
+              <Skeleton height={140} radius={radius.card} />
+              <Skeleton height={120} radius={radius.card} />
             </View>
           ) : status === 'error' ? (
             <ErrorState title="Couldn't load this course" onRetry={() => setAttempt(a => a + 1)} />

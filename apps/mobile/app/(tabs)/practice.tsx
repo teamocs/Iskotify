@@ -83,7 +83,7 @@ function RowGroup({ children }: { children: React.ReactNode }) {
 function SkeletonRows({ label, count = 3 }: { label: string; count?: number }) {
   return (
     <View accessible accessibilityLabel={label} aria-busy style={{ gap: spacing.sm }}>
-      {Array.from({ length: count }, (_, i) => <Skeleton key={i} height={56} radius={radius.lg} />)}
+      {Array.from({ length: count }, (_, i) => <Skeleton key={i} height={56} radius={radius.group} />)}
     </View>
   )
 }
@@ -520,7 +520,7 @@ export default function PracticeScreen() {
       style={(state) => {
         const { pressed, focused } = state as WebPressableState
         return [
-          { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
+          { width: 44, height: 44, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
           focusRing(t.focusRing, focused),
         ]
       }}

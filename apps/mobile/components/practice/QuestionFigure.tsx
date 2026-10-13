@@ -115,7 +115,7 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     wrap: {
       marginBottom: spacing.md,
-      borderRadius: radius.md,
+      borderRadius: radius.button,
       borderCurve: 'continuous',
       overflow: 'hidden',
       alignSelf: 'stretch',
@@ -124,7 +124,7 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme']) {
     image: { width: '100%' },
     placeholder: {
       marginBottom: spacing.md,
-      borderRadius: radius.md,
+      borderRadius: radius.button,
       borderCurve: 'continuous',
       borderWidth: 1.5,
       borderColor: t.border,
@@ -138,7 +138,7 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme']) {
     placeholderNote: { ...iosTextStyle('caption', t.textTertiary), textAlign: 'center' },
     zoomBadge: {
       position: 'absolute', right: spacing.sm, bottom: spacing.sm, width: 32, height: 32,
-      borderRadius: radius.pill, backgroundColor: t.scrim, alignItems: 'center', justifyContent: 'center',
+      borderRadius: radius.capsule, backgroundColor: t.scrim, alignItems: 'center', justifyContent: 'center',
     },
     zoomOverlay: {
       flex: 1,
@@ -152,7 +152,7 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme']) {
       right: 20,
       width: 44,
       height: 44,
-      borderRadius: radius.pill,
+      borderRadius: radius.capsule,
       backgroundColor: t.scrimControl,
       alignItems: 'center',
       justifyContent: 'center',

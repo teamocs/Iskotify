@@ -69,7 +69,7 @@ export function SessionChooser({
               <View
                 {...decorative}
                 style={{
-                  width: 48, height: 48, borderRadius: radius.lg, borderCurve: 'continuous',
+                  width: 48, height: 48, borderRadius: radius.group, borderCurve: 'continuous',
                   backgroundColor: t.accentSurface, alignItems: 'center', justifyContent: 'center',
                 }}
               >
@@ -117,7 +117,7 @@ export function SessionChooser({
           {note ? (
             <View
               style={{
-                padding: spacing.lg, gap: spacing.xs, borderRadius: radius.xl, borderCurve: 'continuous',
+                padding: spacing.lg, gap: spacing.xs, borderRadius: radius.card, borderCurve: 'continuous',
                 borderWidth: 1, borderColor: t.border, borderStyle: 'dashed',
               }}
             >

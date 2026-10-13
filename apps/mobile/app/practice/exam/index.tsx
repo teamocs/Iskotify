@@ -83,7 +83,7 @@ export default function ExamPicker() {
       style={(s) => {
         const { pressed, focused } = s as WebPressableState
         return [
-          { width: 44, height: 44, marginLeft: -spacing.sm, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
+          { width: 44, height: 44, marginLeft: -spacing.sm, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
           focusRing(t.focusRing, focused),
         ]
       }}
@@ -104,7 +104,7 @@ export default function ExamPicker() {
 
         {state.status === 'loading' ? (
           <View accessible accessibilityLabel="Loading mock exams" aria-busy style={{ gap: spacing.sm }}>
-            {[0, 1, 2].map(i => <Skeleton key={i} height={64} radius={radius.lg} />)}
+            {[0, 1, 2].map(i => <Skeleton key={i} height={64} radius={radius.group} />)}
           </View>
         ) : state.status === 'error' ? (
           <ErrorState title="Couldn't load mock exams" onRetry={() => setAttempt(n => n + 1)} />
@@ -115,7 +115,7 @@ export default function ExamPicker() {
             body="Mock exams appear here as soon as they are published. Subjects and drills are ready in the meantime."
           />
         ) : (
-          <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden' }}>
+          <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden' }}>
             {state.rows.map(({ bp, best, ready, items, coverage }, i) => (
               <View key={bp.slug} style={i === 0 ? undefined : { borderTopWidth: 1, borderTopColor: t.divider }}>
                 {ready ? (

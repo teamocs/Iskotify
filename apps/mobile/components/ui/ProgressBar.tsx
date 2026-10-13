@@ -26,9 +26,9 @@ export function ProgressBar({ value, label, tone = 'accent', height = 6 }: Props
       accessibilityRole="progressbar"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: pct }}
-      style={{ height, borderRadius: radius.pill, backgroundColor: t.surface2, overflow: 'hidden' }}
+      style={{ height, borderRadius: radius.capsule, backgroundColor: t.surface2, overflow: 'hidden' }}
     >
-      <View style={{ width: `${pct}%`, height: '100%', borderRadius: radius.pill, backgroundColor: t[FILL[tone]] }} />
+      <View style={{ width: `${pct}%`, height: '100%', borderRadius: radius.capsule, backgroundColor: t[FILL[tone]] }} />
     </View>
   )
 }

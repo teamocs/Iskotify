@@ -13,12 +13,16 @@
  *    routed formSheet);
  *  - a readiness / accuracy / score badge whose tone follows its value
  *    (a traffic light on a practice number is a verdict; brandbook §5), or a
- *    screen importing utils/readinessTone to colour one.
+ *    screen importing utils/readinessTone to colour one;
+ *  - a legacy radius alias (md, lg, xl, xxl, pill);
+ *  - a fixed numeric `height` on a text container (not a square, circle or
+ *    thin bar), which clips at large Dynamic Type.
  *
- * ALLOWLIST: files that may still break a rule, each with its reason. It only
- * shrinks: when the open Practice and Progress/Profile PRs merge, their files
- * leave it (the test prints what is left, and fails on an entry that no longer
- * needs to be here). Test files are never scanned.
+ * ALLOWLIST: files that may still break a rule, each with its reason. Since
+ * the Practice (#98) and Progress/Profile (#99) PRs merged it holds only the
+ * owner-frozen landing page and the genuine full-screen Modal surfaces. It
+ * never grows; the test prints it and fails on a stale entry. Test files are
+ * never scanned.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -26,41 +30,18 @@ import * as path from 'path'
 const ROOT = path.resolve(__dirname, '..')
 const DIRS = ['app', 'components', 'hooks']
 
-type Rule = 'legacy-type' | 'typo' | 'fontSize' | 'modal' | 'score-tone'
-const ALL: Rule[] = ['legacy-type', 'typo', 'fontSize', 'modal', 'score-tone']
+type Rule = 'legacy-type' | 'typo' | 'fontSize' | 'modal' | 'score-tone' | 'legacy-radius' | 'fixed-height'
+const ALL: Rule[] = ['legacy-type', 'typo', 'fontSize', 'modal', 'score-tone', 'legacy-radius', 'fixed-height']
 
 /** path (or directory prefix ending in /) → the rules it may still break, and why. */
 const ALLOWLIST: Record<string, { rules: Rule[]; why: string }> = {
-  // Owned by the open Practice PR (#98): not editable here yet.
-  'app/(tabs)/practice.tsx': { rules: ALL, why: 'Practice PR (#98)' },
-  'app/practice/': { rules: ALL, why: 'Practice PR (#98)' },
-  'app/estimator/': { rules: ALL, why: 'Practice PR (#98), estimator' },
-  'components/practice/': { rules: ALL, why: 'Practice PR (#98)' },
-  'components/upcat/': { rules: ALL, why: 'Practice PR (#98), UPCAT runner' },
-  'components/estimator/': { rules: ALL, why: 'Practice PR (#98), estimator' },
-  'components/ui/EmptyState.tsx': { rules: ALL, why: 'edited by the open Practice PR (#98)' },
-  // Owned by the open Progress / Profile / Settings PR.
-  'app/(tabs)/progress.tsx': { rules: ALL, why: 'Progress/Profile PR' },
-  'app/analytics.tsx': { rules: ALL, why: 'Progress/Profile PR' },
-  'components/analytics/': { rules: ALL, why: 'Progress/Profile PR' },
-  'app/profile/': { rules: ALL, why: 'Progress/Profile PR' },
-  'app/settings.tsx': { rules: ALL, why: 'Progress/Profile PR' },
-  'app/settings/': { rules: ALL, why: 'Progress/Profile PR' },
-  'app/notes/': { rules: ALL, why: 'Progress/Profile PR, notes' },
-  'components/notes/': { rules: ALL, why: 'Progress/Profile PR, notes' },
-  'app/upgrade.tsx': { rules: ALL, why: 'Progress/Profile PR, upgrade' },
-  'components/premium/': { rules: ALL, why: 'Progress/Profile PR, premium' },
-  'app/about.tsx': { rules: ALL, why: 'Progress/Profile PR, about' },
-  'app/help.tsx': { rules: ALL, why: 'Progress/Profile PR, help' },
-  'app/privacy.tsx': { rules: ALL, why: 'Progress/Profile PR, privacy' },
-  'app/terms.tsx': { rules: ALL, why: 'Progress/Profile PR, terms' },
-  'components/DeleteAccountSheet.tsx': { rules: ALL, why: 'Progress/Profile PR, account' },
-  // The landing page's content is frozen by the owner (2026-10-12).
-  'app/landing.tsx': { rules: ALL, why: 'landing content frozen by the owner' },
-  // Full-screen surfaces that legitimately use a Modal (beyond the open PRs).
+  // The landing page's content is frozen by the owner (2026-10-12): it keeps
+  // the legacy aliases it was approved with until the owner reopens it.
+  'app/landing.tsx': { rules: ['legacy-type', 'legacy-radius'], why: 'landing content frozen by the owner (keeps textStyle() and radius.md)' },
+  // The in-place Sheet IS the modal primitive (web focus trap, Android Back).
   'components/ui/Sheet.tsx': { rules: ['modal'], why: 'the P3 Sheet primitive itself' },
+  // Full-screen surfaces that legitimately take over the window.
   'components/practice/ExamPassage.tsx': { rules: ['modal'], why: 'full-screen passage reader' },
-  'components/upcat/PassagePanel.tsx': { rules: ['modal'], why: 'full-screen passage reader' },
   'components/practice/QuestionFigure.tsx': { rules: ['modal'], why: 'full-screen figure zoom' },
   'components/estimator/ScoreDisclaimerModal.tsx': { rules: ['modal'], why: 'the estimator disclaimer' },
 }
@@ -89,6 +70,10 @@ export const RULES: Record<Rule, RegExp> = {
   'typo': /\btypo\b|\btypography\./,
   'fontSize': /\bfontSize\s*:/,
   'modal': /import\s*\{[^}]*\bModal\b[^}]*\}\s*from\s*['"]react-native['"]/,
+  // The legacy radius aliases (md, lg, xl, xxl, pill): the iOS shape scale only.
+  'legacy-radius': /\bradius\.(?:md|lg|xl|xxl|pill)\b/,
+  // Checked by fixedHeights() below (a regex cannot see a width on either side).
+  'fixed-height': /(?:^|[^A-Za-z])height:\s*\d/,
   // A badge for a readiness / accuracy / score / mock percentage whose tone
   // is computed (not the one neutral or accent literal), or the tone helper.
   'score-tone': /utils\/readinessTone|label:\s*`[^`]*(?:[Rr]eadiness|[Aa]ccuracy|[Ss]core|[Mm]ock)[^`]*%`\s*,\s*tone:(?!\s*['"](?:neutral|accent)['"])/,
@@ -104,11 +89,29 @@ function allowedRules(file: string): Rule[] {
     .flatMap(([, v]) => v.rules)
 }
 
+/**
+ * Object literals (innermost) that fix a numeric `height` on something that is
+ * not a square or circle (it also sets `width`) or a hairline / thin bar (6 or
+ * less): a text container that clips at large Dynamic Type. Use minHeight.
+ */
+export function fixedHeights(src: string): string[] {
+  return (src.match(/\{[^{}]*\}/g) ?? []).filter((obj) => {
+    const m = /(?:^|[^A-Za-z])height:\s*(\d+(?:\.\d+)?)/.exec(obj)
+    if (!m) return false
+    if (Number(m[1]) <= 6) return false
+    return !/(?:^|[^A-Za-z])width:/.test(obj)
+  })
+}
+
+function breaks(rule: Rule, src: string): boolean {
+  return rule === 'fixed-height' ? fixedHeights(src).length > 0 : RULES[rule].test(src)
+}
+
 function violations(): { file: string; rule: Rule }[] {
   const out: { file: string; rule: Rule }[] = []
   for (const f of FILES) {
     for (const rule of ALL) {
-      if (!RULES[rule].test(f.src)) continue
+      if (!breaks(rule, f.src)) continue
       if (allowedRules(f.rel).includes(rule)) continue
       out.push({ file: f.rel, rule })
     }
@@ -118,7 +121,7 @@ function violations(): { file: string; rule: Rule }[] {
 
 describe('iOS-language migration is complete outside the allowlist', () => {
   afterAll(() => {
-    // Printed so the list visibly shrinks as the open PRs merge.
+    // Printed so any growth is visible in CI output.
     const used = Object.entries(ALLOWLIST).map(([k, v]) => `  ${k}  (${v.rules.join(', ')}): ${v.why}`)
     console.log(`iosLanguageComplete allowlist (${used.length}):\n${used.join('\n')}`)
   })
@@ -154,6 +157,21 @@ describe('the guard itself', () => {
     expect(RULES.typo.test('typography.lg')).toBe(true)
     expect(RULES.fontSize.test('{ fontSize: 12 }')).toBe(true)
     expect(RULES.fontSize.test("iosTextStyle('caption')")).toBe(false)
+  })
+
+  it('flags the legacy radius aliases, not the iOS shape scale', () => {
+    expect(RULES['legacy-radius'].test('borderRadius: radius.lg')).toBe(true)
+    expect(RULES['legacy-radius'].test('borderRadius: radius.pill')).toBe(true)
+    expect(RULES['legacy-radius'].test('borderRadius: radius.group')).toBe(false)
+    expect(RULES['legacy-radius'].test('borderRadius: radius.capsule')).toBe(false)
+  })
+
+  it('flags a fixed-height text container, not a square, a circle or a thin bar', () => {
+    expect(fixedHeights('<View style={{ height: 48, paddingHorizontal: 8 }} />')).toHaveLength(1)
+    expect(fixedHeights('<View style={{ width: 44, height: 44 }} />')).toEqual([])
+    expect(fixedHeights('<View style={{ height: 44, width: 44 }} />')).toEqual([])
+    expect(fixedHeights('<View style={{ height: 4, borderRadius: 2 }} />')).toEqual([])
+    expect(fixedHeights('<View style={{ minHeight: 48 }} />')).toEqual([])
   })
 
   it('flags a raw Modal import, single- or multi-line', () => {

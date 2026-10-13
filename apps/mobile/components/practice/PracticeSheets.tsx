@@ -27,7 +27,7 @@ function useFieldStyle() {
     paddingVertical: spacing.md,
     borderWidth: 1,
     borderColor: t.textTertiary,
-    borderRadius: radius.md,
+    borderRadius: radius.button,
     borderCurve: 'continuous' as const,
     backgroundColor: t.surface,
   }

@@ -75,20 +75,6 @@ export const lightTheme = {
   inputBorder:   '#9c7c7c',
 }
 
-// Type scale (min 12 for readability — no body/label below 12pt).
-export const typography = {
-  xs:      12,   // was 11 (below the readable minimum)
-  sm:      13,
-  base:    16,
-  md:      17,
-  lg:      20,
-  xl:      22,
-  h3:      26,
-  h2:      30,
-  h1:      36,
-  display: 48,
-} as const
-
 // ── Type: the platform UI font (iOS redesign P1a/P1b) ─────────────────────────
 // Every word is drawn in the system font. The brand fonts were retired in P1b;
 // the legacy roles below are aliases of these iOS roles.
@@ -145,48 +131,36 @@ export function iosTextStyle(role: IosTextRole, color?: string): TextStyle {
   return color ? { ...base, color } : { ...base }
 }
 
-type LegacyTextRole =
-  | 'display' | 'title' | 'headline' | 'titleSm' | 'body' | 'bodySm'
-  | 'label' | 'button' | 'caption' | 'numeric' | 'numericLg'
-
-/** Where each legacy role lands (`label` also takes fontWeight 600). The
- *  cut-over is a token edit, so the `textStyle()` call sites are unchanged. */
+/**
+ * The legacy text API, kept ONLY for app/landing.tsx: its content is frozen
+ * by the owner (2026-10-12), so its six call sites stay as approved. Every
+ * other file uses `<Text role>` or `iosTextStyle()` (guarded repo-wide by
+ * __tests__/iosLanguageComplete.test.ts). The other retired roles (display,
+ * label, button, numeric, numericLg) were removed in the final P4 PR.
+ * @deprecated Use iosTextStyle() or <Text role>.
+ */
 export const legacyTextRoleMap = {
-  display:   'largeTitle',
   title:     'title1',
   headline:  'title3',
   titleSm:   'headline',
   body:      'body',
   bodySm:    'footnote',
-  label:     'footnote',
-  button:    'headline',
   caption:   'caption',
-  numeric:   'numeric',
-  numericLg: 'numericLg',
-} as const satisfies Record<LegacyTextRole, IosTextRole>
+} as const satisfies Record<string, IosTextRole>
 
-/**
- * Legacy type roles, now aliases of the iOS roles (see legacyTextRoleMap).
- * Kept so existing `textStyle(role, color)` call sites work unchanged; new
- * code uses `<Text role>` or `iosTextStyle()`.
- */
+/** @deprecated Landing only; see legacyTextRoleMap. */
 export const textStyles = {
-  display:   iosTextStyles[legacyTextRoleMap.display],
   title:     iosTextStyles[legacyTextRoleMap.title],
   headline:  iosTextStyles[legacyTextRoleMap.headline],
   titleSm:   iosTextStyles[legacyTextRoleMap.titleSm],
   body:      iosTextStyles[legacyTextRoleMap.body],
   bodySm:    iosTextStyles[legacyTextRoleMap.bodySm],
-  label:     { ...iosTextStyles[legacyTextRoleMap.label], fontWeight: '600' },
-  button:    iosTextStyles[legacyTextRoleMap.button],
   caption:   iosTextStyles[legacyTextRoleMap.caption],
-  numeric:   iosTextStyles[legacyTextRoleMap.numeric],
-  numericLg: iosTextStyles[legacyTextRoleMap.numericLg],
-} as const satisfies Record<LegacyTextRole, IosTextRoleStyle>
+} as const satisfies Record<keyof typeof legacyTextRoleMap, IosTextRoleStyle>
 
 export type TextStyleRole = keyof typeof textStyles
 
-/** A type role as a TextStyle, optionally with a colour (pass a theme token). */
+/** @deprecated Landing only. A legacy role as a TextStyle, optionally with a colour. */
 export function textStyle(role: TextStyleRole, color?: string): TextStyle {
   const base = textStyles[role] as TextStyle
   return color ? { ...base, color } : { ...base }
@@ -268,16 +242,13 @@ export const spacing = {
   xxxl: 32,
 } as const
 
-// Corner radii (use with { borderCurve: 'continuous' } except pill/capsule).
-// The iOS shape scale (chip … capsule) is the target; the old keys stay as
-// aliases until the final P4 PR. `sm` (10) was split into chip 8 / field 12
-// in P1c and is gone.
+// Corner radii: the iOS shape scale (use with { borderCurve: 'continuous' }
+// except capsule). The legacy aliases (lg, xl, xxl, pill) were removed in the
+// final P4 PR; `md` (14, = button) stays only for the owner-frozen
+// app/landing.tsx. `sm` (10) was split into chip 8 / field 12 in P1c.
 export const radius = {
+  /** @deprecated Landing only; use `button`. */
   md:   14,
-  lg:   18,
-  xl:   22,
-  xxl:  28,
-  pill: 999,
   chip:    8,
   field:   12,
   button:  14,
@@ -308,7 +279,6 @@ export const layout = {
 } as const
 
 export type Theme      = typeof lightTheme
-export type Typography = typeof typography
 export type Spacing    = typeof spacing
 export type Radius     = typeof radius
 export type Motion     = typeof motion

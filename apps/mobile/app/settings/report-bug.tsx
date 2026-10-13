@@ -72,7 +72,7 @@ export default function ReportBugScreen() {
     return (
       <InfoPage title="Report a bug">
         <View style={{ gap: spacing.lg }}>
-          <StatusPanel tone="success" title="Report sent. Salamat!">
+          <StatusPanel tone="success" title="Report sent. Thanks.">
             <Text role="footnote" color={t.textSecondary}>
               Thanks for helping make Iskotify better. We&apos;ll look into it as soon as we can.
             </Text>

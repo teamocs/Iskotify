@@ -61,7 +61,7 @@ export default function GwaCalculatorScreen() {
       {honor != null ? (
         <View style={{
           alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-          backgroundColor: t.surface2, borderRadius: radius.pill,
+          backgroundColor: t.surface2, borderRadius: radius.capsule,
           paddingHorizontal: spacing.md, minHeight: 32,
         }}>
           <View {...decorative}><Lineicons icon={GraduationCap1Outlined} size={16} color={t.textPrimary} /></View>
@@ -126,7 +126,7 @@ export default function GwaCalculatorScreen() {
                   return [
                     {
                       // Sits level with the input under its label.
-                      marginTop: 22, width: 48, height: 48, borderRadius: radius.md, borderCurve: 'continuous',
+                      marginTop: 22, width: 48, height: 48, borderRadius: radius.button, borderCurve: 'continuous',
                       alignItems: 'center', justifyContent: 'center',
                       backgroundColor: (pressed || hovered) && canRemove ? t.surface2 : 'transparent',
                       opacity: canRemove ? 1 : 0.4,

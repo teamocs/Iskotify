@@ -62,7 +62,7 @@ describe('LeaveFeedbackScreen', () => {
     expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
     fireEvent.changeText(screen.getByLabelText('Your message'), 'Love it')
     fireEvent.press(screen.getByRole('button', { name: 'Send feedback' }))
-    await screen.findByText(/Salamat/)
+    await screen.findByText(/Thanks. We got your feedback/)
     expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 
@@ -72,7 +72,7 @@ describe('LeaveFeedbackScreen', () => {
     fireEvent.changeText(screen.getByLabelText('Your message'), 'Love it')
     fireEvent.press(screen.getByRole('button', { name: 'Send feedback' }))
     await waitFor(() => expect(mockSubmitFeedback).toHaveBeenCalledWith({ rating: 5, message: 'Love it' }))
-    expect(await screen.findByText(/Salamat/)).toBeTruthy()
+    expect(await screen.findByText(/Thanks. We got your feedback/)).toBeTruthy()
   })
 
   it('announces a send failure as an alert', async () => {

@@ -80,7 +80,7 @@ function ToolButton({ label, onPress, active, children }: {
       style={({ pressed, hovered, focused }) => {
         return [
           {
-            width: 44, height: 44, borderRadius: radius.md, borderCurve: 'continuous',
+            width: 44, height: 44, borderRadius: radius.button, borderCurve: 'continuous',
             alignItems: 'center', justifyContent: 'center',
             backgroundColor: active ? t.accentSurface : pressed || hovered ? t.surface2 : 'transparent',
           },
@@ -340,7 +340,7 @@ export default function NoteEditorScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View accessible accessibilityLabel="Loading note" aria-busy style={{ gap: spacing.md, paddingTop: spacing.sm }}>
           <Skeleton width="60%" height={32} />
-          <Skeleton height={240} radius={radius.xl} />
+          <Skeleton height={240} radius={radius.card} />
         </View>
       </Screen>
     )
@@ -384,7 +384,7 @@ export default function NoteEditorScreen() {
           style={{
             flex: 1,
             backgroundColor: noteSurface(t, color),
-            borderRadius: radius.xl,
+            borderRadius: radius.card,
             borderCurve: 'continuous',
             borderWidth: 1,
             borderColor: t.border,
@@ -416,7 +416,7 @@ export default function NoteEditorScreen() {
                   return [
                     {
                       alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-                      minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill,
+                      minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.capsule,
                       backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder,
                     },
                     focusRing(t.focusRing, focused),
@@ -489,7 +489,7 @@ export default function NoteEditorScreen() {
                     aria-checked={on}
                     style={({ focused }) => {
                       return [
-                        { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+                        { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.capsule },
                         focusRing(t.focusRing, focused),
                       ]
                     }}
@@ -497,7 +497,7 @@ export default function NoteEditorScreen() {
                     <View
                       {...decorative}
                       style={{
-                        width: 30, height: 30, borderRadius: radius.pill,
+                        width: 30, height: 30, borderRadius: radius.capsule,
                         borderWidth: on ? 2 : 1,
                         borderColor: on ? t.accent : noteSwatchBorder(t, sw.key),
                         backgroundColor: t.bg,

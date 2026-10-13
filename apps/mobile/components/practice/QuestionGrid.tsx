@@ -76,7 +76,7 @@ export const QuestionGrid = memo(function QuestionGrid({
               <View
                 testID="qgrid-answered-mark"
                 {...decorative}
-                style={{ position: 'absolute', bottom: 6, width: 14, height: 3, borderRadius: radius.pill, backgroundColor: t.accentText }}
+                style={{ position: 'absolute', bottom: 6, width: 14, height: 3, borderRadius: radius.capsule, backgroundColor: t.accentText }}
               />
             ) : null}
             {locked ? (
