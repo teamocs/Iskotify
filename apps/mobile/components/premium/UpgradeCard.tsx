@@ -1,10 +1,11 @@
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
 import { router, type Href } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Locked1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../theme/tokens'
+import { spacing, radius } from '../../theme/tokens'
 import { Button } from '../ui/Button'
+import { Text } from '../ui/Text'
 import { decorative, heading } from '../ui/a11y'
 import { FREE_DAILY_PRACTICE_QUESTIONS } from '../../utils/premiumLimits'
 
@@ -35,18 +36,18 @@ export function UpgradeCard({ title, body, source, testID }: Props) {
       testID={testID}
       style={{
         backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder,
-        borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg, gap: spacing.md,
+        borderRadius: radius.card, borderCurve: 'continuous', padding: spacing.lg, gap: spacing.md,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
         <View {...decorative}>
           <Lineicons icon={Locked1Outlined} size={20} color={t.accentText} />
         </View>
-        <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={2}>
+        <Text role="headline" {...heading(2)} style={{ flexShrink: 1 }}>
           {title}
         </Text>
       </View>
-      <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>{body}</Text>
+      <Text role="body">{body}</Text>
       <Button label="Unlock Full Access" fullWidth onPress={() => router.push(upgradeHref(source))} />
     </View>
   )

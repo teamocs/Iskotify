@@ -8,11 +8,11 @@ import { spacing } from '../../theme/tokens'
 import { useNotes, type Note } from '../../hooks/useNotes'
 import { confirmAction } from '../../utils/confirmAction'
 import { Screen } from '../../components/ui/Screen'
-import { PageTitle } from '../../components/ui/PageTitle'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
+import { LargeTitleHeader } from '../../components/navigation/LargeTitleHeader'
 import { NoteCard } from '../../components/notes/NoteCard'
 import { NotesGrid, NotesSkeleton } from '../../components/notes/NotesGrid'
 
@@ -91,13 +91,16 @@ export default function TrashScreen() {
   return (
     <Screen width="wide" header={<DetailTopBar bare fallbackHref="/notes" />}>
       <Stack.Screen options={{ headerShown: false }} />
-      <PageTitle
-        title="Trash"
-        lead="Notes here are deleted forever after 7 days."
-        trailing={notes.length > 0 ? (
-          <Button size="sm" variant="danger" label="Empty trash" onPress={handleEmptyTrash} />
-        ) : undefined}
-      />
+      <View style={{ marginBottom: spacing.lg }}>
+        <LargeTitleHeader
+          collapses={false}
+          title="Trash"
+          subtitle="Notes here are deleted forever after 7 days."
+          actions={notes.length > 0 ? (
+            <Button size="sm" variant="danger" label="Empty trash" onPress={handleEmptyTrash} />
+          ) : undefined}
+        />
+      </View>
       {body}
     </Screen>
   )

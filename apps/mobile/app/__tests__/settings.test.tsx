@@ -150,6 +150,25 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText('Student')).toBeTruthy()
   })
 
+  // P4: the move to inset groups keeps every setting.
+  it('keeps every option, in inset groups with footnote headers', async () => {
+    Platform.OS = 'android'
+    render(<SettingsScreen />)
+    await screen.findByText('Student')
+    for (const name of ['Profile', 'Notifications', 'Privacy', 'Feedback', 'About', 'Session']) {
+      expect(screen.getByRole('header', { name })).toBeTruthy()
+    }
+    for (const name of ['Push notifications', 'Weekly summary', 'Share anonymous usage analytics']) {
+      expect(screen.getByRole('switch', { name })).toBeTruthy()
+    }
+    for (const name of ['Earlier', 'Later', 'Grades and family details', 'Report a bug', 'Leave feedback',
+      'About Iskotify', 'Help and support', 'Privacy policy', 'Terms of service', 'Exit app']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy()
+    }
+    expect(screen.getByText('Daily reminder time')).toBeTruthy()
+    expect(screen.getAllByTestId('inset-group').length).toBe(6)
+  })
+
   it('has no on-device AI model controls: the student app ships no AI', () => {
     render(<SettingsScreen />)
     expect(screen.queryByRole('header', { name: 'Offline tools' })).toBeNull()

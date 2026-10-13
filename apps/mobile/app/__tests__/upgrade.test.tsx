@@ -2,7 +2,10 @@
 // their own behaviour is covered in services/__tests__/premium*.test.ts.
 import React from 'react'
 import { render, screen, fireEvent, act } from '@testing-library/react-native'
+import * as fs from 'fs'
+import * as path from 'path'
 import UpgradeScreen from '../upgrade'
+import { countPrimaryActions } from '../../test-utils/primaryActions'
 
 let mockParams: { status?: string; from?: string } = {}
 const mockPush = jest.fn()
@@ -267,5 +270,85 @@ describe('web (PayMongo)', () => {
     render(<UpgradeScreen />)
     expect(await screen.findByText(/cancelled/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Pay with GCash, Maya or card' })).toBeTruthy()
+  })
+})
+
+// Store compliance: the price, the one-time (nothing to cancel) wording, the
+// Terms and Restore stay on screen, and every state has one primary action.
+describe('store-compliance copy and one primary action (iOS-language P4)', () => {
+  it('Android: price, one-time and nothing-to-cancel line, Terms and Restore are visible', async () => {
+    render(<UpgradeScreen />)
+    expect(await screen.findByText('₱500.00, one-time payment')).toBeTruthy()
+    expect(screen.getByText('Not a subscription. You pay once and Full Access stays on your account.')).toBeTruthy()
+    expect(screen.getByText('By buying you agree to the')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Restore purchases' })).toBeTruthy()
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+  })
+
+  it('the Terms link opens the in-app terms', async () => {
+    render(<UpgradeScreen />)
+    fireEvent.press(await screen.findByRole('link', { name: 'Terms of Service' }))
+    expect(mockPush).toHaveBeenCalledWith('/terms')
+  })
+
+  it('web: the price, one-time wording and Terms are visible with one primary', async () => {
+    Object.assign(mockStore, { channel: 'web', price: '₱500' })
+    render(<UpgradeScreen />)
+    await screen.findByRole('button', { name: 'Pay with GCash, Maya or card' })
+    expect(screen.getByText('₱500, one-time payment')).toBeTruthy()
+    expect(screen.getByText(/not a subscription/i)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toBeTruthy()
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+  })
+
+  it('signed out: one primary (Sign in to continue)', async () => {
+    mockSession.signedIn = false
+    render(<UpgradeScreen />)
+    await screen.findByRole('button', { name: 'Sign in to continue' })
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+  })
+
+  it('error: one primary (Try again)', async () => {
+    mockBuy.mockResolvedValueOnce({ status: 'error', message: 'Nope.' })
+    render(<UpgradeScreen />)
+    const btn = await screen.findByRole('button', { name: 'Buy through Google Play' })
+    await act(async () => { fireEvent.press(btn) })
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+  })
+
+  it('pending: one primary (Check again)', async () => {
+    mockConfirm.mockResolvedValue('pending')
+    render(<UpgradeScreen />)
+    const btn = await screen.findByRole('button', { name: 'Buy through Google Play' })
+    await act(async () => { fireEvent.press(btn) })
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+  })
+
+  it('owned: one primary (Start practising)', async () => {
+    Object.assign(mockPremium, { isPremium: true, unlimited: true })
+    render(<UpgradeScreen />)
+    await screen.findByText('You have Full Access')
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+  })
+
+  it('no store on this device: no primary at all', async () => {
+    mockStore.available = false
+    render(<UpgradeScreen />)
+    await screen.findByText('Not available on this device yet.')
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(0)
+  })
+})
+
+describe('upgrade design (iOS-language P4)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../upgrade.tsx'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+
+  it('uses <Text role> only, the iOS radius scale and PressableScale', () => {
+    expect(src).not.toMatch(/\btextStyle\(|\btypo\b|\btypography\./)
+    expect(src).not.toMatch(/\bradius\.(?:md|lg|xl|xxl|pill)\b/)
+    expect(src).not.toMatch(/import\s*\{[^}]*\b(?:Pressable|TouchableOpacity|TouchableHighlight|Modal)\b[^}]*\}\s*from\s*'react-native'/)
   })
 })

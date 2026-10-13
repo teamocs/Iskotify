@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react-native'
 import ArchiveScreen from '../archive'
 import TrashScreen from '../trash'
 import LabelsScreen from '../labels'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
 
 jest.mock('expo-router', () => ({
   router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: () => true },
@@ -129,7 +130,7 @@ describe('Labels', () => {
     expectOneTitle('Labels')
     expect(screen.getByLabelText('New label')).toBeTruthy()
     expect(screen.getByRole('header', { name: 'No labels yet' })).toBeTruthy()
-    expect(screen.queryByText('‹')).toBeNull()
+    expect(screen.queryByText('\u2039')).toBeNull()
   })
 
   it('adds a label with the named Add label button', async () => {
@@ -158,5 +159,33 @@ describe('Labels', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Delete Math' }))
     await act(async () => { mockConfirm.mock.calls[0][3]() })
     expect(mockLabels.deleteLabel).toHaveBeenCalledWith('l2')
+  })
+
+  it('lists the labels in one inset group', () => {
+    mockLabels.labels = [{ id: 'l1', name: 'UPCAT', createdAt: 1 }, { id: 'l2', name: 'Math', createdAt: 1 }]
+    render(<LabelsScreen />)
+    expect(screen.getByTestId('labels-list')).toBeTruthy()
+    // Hairline separators are decorative (hidden from assistive tech): one between two rows.
+    expect(screen.getAllByTestId('inset-row-separator', { includeHiddenElements: true })).toHaveLength(1)
+  })
+})
+
+describe('Primary actions (DESIGN.md direction C: at most one maroon action per screen)', () => {
+  it('Archive and Trash have no primary: their row and header actions are secondary or danger', () => {
+    mockHook.notes = [note('x1', { isArchived: true, isTrashed: true })]
+    const a = render(<ArchiveScreen />)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(0)
+    a.unmount()
+    render(<TrashScreen />)
+    expect(screen.getByRole('button', { name: 'Empty trash' })).toBeTruthy()
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(0)
+  })
+
+  it('Labels has exactly one primary (Add label), also while renaming', () => {
+    mockLabels.labels = [{ id: 'l1', name: 'UPCAT', createdAt: 1 }]
+    render(<LabelsScreen />)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+    fireEvent.press(screen.getByRole('button', { name: 'Rename UPCAT' }))
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 })

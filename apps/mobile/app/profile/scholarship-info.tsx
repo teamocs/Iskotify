@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { View, Text, Pressable, TextInput, ScrollView } from 'react-native'
+import { View, Text, TextInput, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { router } from 'expo-router'
@@ -13,11 +13,12 @@ import { pushUserData } from '../../services/sync'
 import type { IncomeBracket } from '../../utils/scholarshipMatch'
 import { PH_PROVINCES } from '../../data/phProvinces'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../theme/tokens'
+import { spacing, radius, iosTextStyle } from '../../theme/tokens'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { PageTitle } from '../../components/ui/PageTitle'
 import { heading } from '../../components/ui/a11y'
+import { PressableScale } from '../../components/ui/Pressable'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { useBreakpoint, pagePadding, contentMaxWidth } from '../../hooks/useBreakpoint'
 import { FilterChip } from '../../components/ui/Chip'
@@ -97,12 +98,12 @@ export default function ScholarshipInfoScreen() {
   // Today's scholarship-profile prompt on the way out so it never lists them stale.
   useEffect(() => () => invalidate(SCHOLARSHIP_PROMPT_KEY), [])
 
-  const labelStyle = useMemo(() => [textStyle('label', t.textPrimary), { marginBottom: spacing.sm }], [t])
-  const hintStyle = useMemo(() => [textStyle('bodySm', t.textSecondary), { marginBottom: spacing.sm }], [t])
+  const labelStyle = useMemo(() => [{ ...iosTextStyle('footnote', t.textPrimary), fontWeight: '600' as const }, { marginBottom: spacing.sm }], [t])
+  const hintStyle = useMemo(() => [iosTextStyle('footnote', t.textSecondary), { marginBottom: spacing.sm }], [t])
   // Control boundary: textTertiary clears 3:1 (WCAG 1.4.11) on both surfaces.
   const inputStyle = useMemo(() => ({
-    ...textStyle('body', t.textPrimary),
-    backgroundColor: t.surface, borderWidth: 1, borderColor: t.textTertiary, borderRadius: radius.md,
+    ...iosTextStyle('body', t.textPrimary),
+    backgroundColor: t.surface, borderWidth: 1, borderColor: t.textTertiary, borderRadius: radius.field,
     borderCurve: 'continuous' as const, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, minHeight: 48,
   }), [t])
 
@@ -244,7 +245,7 @@ export default function ScholarshipInfoScreen() {
                 returnKeyType="done"
               />
               {gwaError ? (
-                <Text accessibilityRole="alert" style={[textStyle('bodySm', t.danger), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
+                <Text accessibilityRole="alert" style={[iosTextStyle('footnote', t.danger), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
                   {gwaError}
                 </Text>
               ) : null}
@@ -277,24 +278,24 @@ export default function ScholarshipInfoScreen() {
                       paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
                     }}
                   >
-                    <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={2}>{province}</Text>
+                    <Text style={{ ...iosTextStyle('footnote', t.accentText), fontWeight: '600' as const }} maxFontSizeMultiplier={2}>{province}</Text>
                   </View>
-                  <Pressable
+                  <PressableScale
                     onPress={() => { setProvince(''); setProvinceQuery('') }}
                     accessibilityRole="button"
                     accessibilityLabel="Clear province"
                     style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: spacing.sm }}
                   >
-                    <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={2}>Clear</Text>
-                  </Pressable>
+                    <Text style={{ ...iosTextStyle('footnote', t.accentText), fontWeight: '600' as const }} maxFontSizeMultiplier={2}>Clear</Text>
+                  </PressableScale>
                 </View>
               ) : null}
-              <View accessibilityRole="radiogroup" accessibilityLabel="Province" style={{ maxHeight: 220, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', overflow: 'hidden' }}>
+              <View accessibilityRole="radiogroup" accessibilityLabel="Province" style={{ maxHeight: 220, borderWidth: 1, borderColor: t.border, borderRadius: radius.button, borderCurve: 'continuous', overflow: 'hidden' }}>
                 <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
                   {filteredProvinces.map(p => {
                     const selected = province === p
                     return (
-                      <Pressable
+                      <PressableScale
                         key={p}
                         onPress={() => { setProvince(p); setProvinceQuery(p) }}
                         accessibilityRole="radio"
@@ -305,10 +306,10 @@ export default function ScholarshipInfoScreen() {
                           borderBottomWidth: 1, borderBottomColor: t.divider,
                         })}
                       >
-                        <Text style={textStyle(selected ? 'label' : 'bodySm', selected ? t.accentText : t.textPrimary)} maxFontSizeMultiplier={2}>
+                        <Text style={[iosTextStyle('footnote', selected ? t.accentText : t.textPrimary), selected ? { fontWeight: '600' as const } : null]} maxFontSizeMultiplier={2}>
                           {p}
                         </Text>
-                      </Pressable>
+                      </PressableScale>
                     )
                   })}
                 </ScrollView>
@@ -316,7 +317,7 @@ export default function ScholarshipInfoScreen() {
             </Card>
 
             {saveError ? (
-              <Text accessibilityRole="alert" style={textStyle('bodySm', t.dangerStrong)} maxFontSizeMultiplier={2}>{saveError}</Text>
+              <Text accessibilityRole="alert" style={iosTextStyle('footnote', t.dangerStrong)} maxFontSizeMultiplier={2}>{saveError}</Text>
             ) : null}
             <View style={{ marginTop: spacing.sm }}>
               <Button label="Save" accessibilityLabel="Save" size="lg" onPress={() => void handleSave()} fullWidth={bp === 'compact'} loading={saving} disabled={!loaded} />

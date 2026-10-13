@@ -59,6 +59,19 @@ describe('LargeTitleHeader', () => {
     fireEvent(screen.getByTestId('large-title-header'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 80 } } })
     expect(screen.getByTestId('large-title-inline', { includeHiddenElements: true }).props.children).toBe('Search')
   })
+
+  // P4: under a fixed top bar (Notes, Labels, Archive, Trash) the band would
+  // cover the back button, so those titles opt out of collapsing.
+  it('collapses={false} never registers a band', () => {
+    render(
+      <LargeTitleBandHost scrollY={sv(0)}>
+        <LargeTitleHeader title="Archive" collapses={false} />
+      </LargeTitleBandHost>,
+    )
+    fireEvent(screen.getByTestId('large-title-header'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 80 } } })
+    expect(screen.queryByTestId('large-title-band', { includeHiddenElements: true })).toBeNull()
+    expect(screen.getByRole('header', { name: 'Archive' })).toBeTruthy()
+  })
 })
 
 describe('CollapsedTitleBand', () => {

@@ -1,9 +1,11 @@
-import { View, Text, Pressable } from 'react-native'
+import { View } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bell1Outlined, CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
-import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
+import { radius, spacing } from '../../theme/tokens'
+import { decorative, focusRing } from '../ui/a11y'
+import { PressableScale } from '../ui/Pressable'
+import { Text } from '../ui/Text'
 import { parseChecklistItems, type Note } from '../../hooks/useNotes'
 import { noteSurface } from './noteTone'
 
@@ -42,10 +44,10 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
   const body = (
     <>
       {note.title.length > 0 ? (
-        <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{note.title}</Text>
+        <Text role="headline">{note.title}</Text>
       ) : null}
       {note.type === 'text' && note.content.length > 0 ? (
-        <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={6} maxFontSizeMultiplier={2}>
+        <Text role="footnote" color={t.textSecondary} numberOfLines={6}>
           {note.content}
         </Text>
       ) : null}
@@ -65,19 +67,17 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
                 {item.isChecked ? <Lineicons icon={CheckOutlined} size={10} color={t.surface} /> : null}
               </View>
               <Text
-                style={[
-                  textStyle('bodySm', item.isChecked ? t.textSecondary : t.textPrimary),
-                  { flex: 1, textDecorationLine: item.isChecked ? 'line-through' : 'none' },
-                ]}
+                role="footnote"
+                color={item.isChecked ? t.textSecondary : t.textPrimary}
+                style={{ flex: 1, textDecorationLine: item.isChecked ? 'line-through' : 'none' }}
                 numberOfLines={1}
-                maxFontSizeMultiplier={2}
               >
                 {item.text}
               </Text>
             </View>
           ))}
           {items.length > 5 ? (
-            <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
+            <Text role="caption" color={t.textSecondary}>
               {items.length - 5} more
             </Text>
           ) : null}
@@ -86,7 +86,7 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
       {hasReminder ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>
           <View {...decorative}><Lineicons icon={Bell1Outlined} size={12} color={t.textSecondary} /></View>
-          <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
+          <Text role="caption" color={t.textSecondary}>
             {formatReminderShort(note.reminderAt!)}
           </Text>
         </View>
@@ -113,7 +113,7 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
 
   return (
     <View style={frame}>
-      <Pressable
+      <PressableScale
         onPress={onPress}
         onLongPress={onLongPress}
         // Bulk selection: the card is a checkbox (the app's multi-select
@@ -122,8 +122,7 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
         accessibilityLabel={name}
         accessibilityHint={selecting ? undefined : onLongPress ? 'Opens the note. Long press to select.' : 'Opens the note.'}
         aria-checked={selecting ? selected : undefined}
-        style={(state) => {
-          const { pressed, hovered, focused } = state as WebPressableState
+        style={({ pressed, hovered, focused }) => {
           return [
             {
               minHeight: 44,
@@ -137,7 +136,7 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
         }}
       >
         {body}
-      </Pressable>
+      </PressableScale>
       {footer ? <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>{footer}</View> : null}
     </View>
   )

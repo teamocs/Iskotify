@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { View } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
@@ -14,20 +14,22 @@ import {
   Notebook1Outlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { useNotes, type Note, type NoteType } from '../../hooks/useNotes'
 import { confirmAction } from '../../utils/confirmAction'
 import { Screen } from '../../components/ui/Screen'
-import { PageTitle } from '../../components/ui/PageTitle'
+import { Text } from '../../components/ui/Text'
+import { PressableScale } from '../../components/ui/Pressable'
 import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { ListRow } from '../../components/ui/ListRow'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
 import { Sheet } from '../../components/ui/Sheet'
-import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { decorative, focusRing } from '../../components/ui/a11y'
+import { LargeTitleHeader } from '../../components/navigation/LargeTitleHeader'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
 import { NoteCard } from '../../components/notes/NoteCard'
@@ -130,11 +132,7 @@ export default function NotesScreen() {
         minHeight: 56, paddingVertical: spacing.sm,
       }}
     >
-      <Text
-        accessibilityLiveRegion="polite"
-        style={[textStyle('titleSm', t.textPrimary), { flexGrow: 1 }]}
-        maxFontSizeMultiplier={2}
-      >
+      <Text role="headline" accessibilityLiveRegion="polite" style={{ flexGrow: 1 }}>
         {`${selected.size} selected`}
       </Text>
       <Button size="sm" variant="secondary" label="Pin" onPress={() => void bulkPin()}
@@ -198,13 +196,13 @@ export default function NotesScreen() {
           header={selecting ? selectionBar : <DetailTopBar bare fallbackHref="/practice" />}
           contentContainerStyle={phone ? { paddingBottom: 56 + spacing.xxl } : undefined}
         >
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', columnGap: spacing.lg }}>
-            <View style={{ flexShrink: 1, flexGrow: 1 }}>
-              <PageTitle title="Notes" lead="Formulas, reminders and checklists for your review." />
-            </View>
-            {!phone ? (
-              <Button label="New note" onPress={() => setChooserOpen(true)} icon={newNoteIcon} style={{ marginTop: spacing.xs }} />
-            ) : null}
+          <View style={{ marginBottom: spacing.lg }}>
+            <LargeTitleHeader
+              collapses={false}
+              title="Notes"
+              subtitle="Formulas, reminders and checklists for your review."
+              actions={!phone ? <Button label="New note" onPress={() => setChooserOpen(true)} icon={newNoteIcon} /> : undefined}
+            />
           </View>
 
           <View
@@ -247,15 +245,15 @@ export default function NotesScreen() {
         </Screen>
 
         {phone && !selecting ? (
-          <Pressable
-            testID="notes-fab"
+          <PressableScale
+            // The phone's one primary action (DESIGN.md direction C).
+            testID="primary-action"
             onPress={() => setChooserOpen(true)}
             onLongPress={() => void handleCreate('text')}
             accessibilityRole="button"
             accessibilityLabel="New note"
             accessibilityHint="Long press to start a text note straight away."
-            style={(state) => {
-              const { pressed, focused } = state as WebPressableState
+            style={({ pressed, focused }) => {
               return [
                 {
                   position: 'absolute', right: spacing.xl, bottom: insets.bottom + spacing.xl,
@@ -269,24 +267,26 @@ export default function NotesScreen() {
             }}
           >
             <View {...decorative}><Lineicons icon={PlusOutlined} size={24} color={t.textInverse} /></View>
-          </Pressable>
+          </PressableScale>
         ) : null}
 
         <Sheet visible={chooserOpen} title="New note" onClose={() => setChooserOpen(false)}>
-          <ListRow
-            leading={<Lineicons icon={Pencil1Outlined} size={20} color={t.accentText} />}
-            title="Text note"
-            subtitle="Write freely"
-            onPress={() => void handleCreate('text')}
-            showChevron={false}
-          />
-          <ListRow
-            leading={<Lineicons icon={CheckSquare2Outlined} size={20} color={t.accentText} />}
-            title="Checklist"
-            subtitle="A to-do list you can tick off"
-            onPress={() => void handleCreate('checklist')}
-            showChevron={false}
-          />
+          <InsetGroup inset={false} testID="note-type-chooser">
+            <InsetRow
+              icon={Pencil1Outlined}
+              title="Text note"
+              subtitle="Write freely"
+              onPress={() => void handleCreate('text')}
+              chevron={false}
+            />
+            <InsetRow
+              icon={CheckSquare2Outlined}
+              title="Checklist"
+              subtitle="A to-do list you can tick off"
+              onPress={() => void handleCreate('checklist')}
+              chevron={false}
+            />
+          </InsetGroup>
         </Sheet>
       </View>
     </EdgeSwipeNavigator>

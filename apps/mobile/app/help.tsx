@@ -1,13 +1,14 @@
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { InfoPage, InfoSection, Prose } from '../components/info/InfoPage'
 import { Disclosure } from '../components/explore/Disclosure'
 import { Button } from '../components/ui/Button'
+import { Text } from '../components/ui/Text'
 import { decorative, heading } from '../components/ui/a11y'
 import { TAB_DESTINATIONS } from '../components/navigation/destinations'
 import { useTheme } from '../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../theme/tokens'
+import { radius, spacing } from '../theme/tokens'
 
 type QA = { q: string; a: string }
 
@@ -83,7 +84,7 @@ function TourEntry() {
   return (
     <View
       style={{
-        backgroundColor: t.accentSurface, borderRadius: radius.xl, borderCurve: 'continuous',
+        backgroundColor: t.accentSurface, borderRadius: radius.card, borderCurve: 'continuous',
         padding: spacing.xl, gap: spacing.lg, marginBottom: spacing.xxxl,
       }}
     >
@@ -92,7 +93,7 @@ function TourEntry() {
           <View
             key={d.name}
             style={{
-              width: 40, height: 40, borderRadius: radius.md, borderCurve: 'continuous',
+              width: 40, height: 40, borderRadius: radius.button, borderCurve: 'continuous',
               backgroundColor: i === 0 ? t.accent : t.surface, alignItems: 'center', justifyContent: 'center',
             }}
           >
@@ -101,10 +102,10 @@ function TourEntry() {
         ))}
       </View>
       <View style={{ gap: spacing.xs }}>
-        <Text {...heading(2)} style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+        <Text role="title3" {...heading(2)} maxFontSizeMultiplier={1.6}>
           New here? See how it works
         </Text>
-        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+        <Text role="body" color={t.textSecondary}>
           A one-minute tour of Today, Practice, Explore and Progress.
         </Text>
       </View>

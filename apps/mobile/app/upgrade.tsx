@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, Text, Pressable, Platform } from 'react-native'
+import { View, Platform } from 'react-native'
 import { router, useLocalSearchParams, Redirect, type Href } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
 import { Screen } from '../components/ui/Screen'
 import { PageTitle } from '../components/ui/PageTitle'
 import { Button } from '../components/ui/Button'
+import { PressableScale } from '../components/ui/Pressable'
+import { Text } from '../components/ui/Text'
 import { DetailTopBar } from '../components/explore/DetailTopBar'
-import { decorative, focusRing, heading, type WebPressableState } from '../components/ui/a11y'
+import { decorative, focusRing, heading } from '../components/ui/a11y'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../theme/tokens'
+import { spacing, radius, weight } from '../theme/tokens'
 import { usePremium } from '../hooks/usePremium'
 import { PURCHASE_CHANNEL, getFullAccessPrice, storeAvailable } from '../services/premium'
 import { buyFullAccess, restoreFullAccessForUser, confirmPurchase, pollPremium } from '../services/premiumState'
@@ -180,15 +182,15 @@ export default function UpgradeScreen() {
           <View
             style={{
               flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: t.successSurface,
-              borderWidth: 1, borderColor: t.successBorder, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg,
+              borderWidth: 1, borderColor: t.successBorder, borderRadius: radius.card, borderCurve: 'continuous', padding: spacing.lg,
             }}
           >
             <View {...decorative}>
               <Lineicons icon={CheckCircle1Outlined} size={24} color={t.successStrong} />
             </View>
             <View style={{ flex: 1, gap: spacing.xs }}>
-              <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>You have Full Access</Text>
-              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+              <Text role="headline" {...heading(2)}>You have Full Access</Text>
+              <Text role="footnote" color={t.textSecondary}>
                 Unlimited practice and full mocks are on, on every device you sign in to.
               </Text>
             </View>
@@ -196,32 +198,27 @@ export default function UpgradeScreen() {
         ) : null}
 
         <View style={{ gap: spacing.md }}>
-          <Text {...heading(2)} style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>What you get</Text>
+          <Text role="title3" {...heading(2)} maxFontSizeMultiplier={1.6}>What you get</Text>
           <View style={{ gap: spacing.sm }}>
             {INCLUDED.map(line => (
               <View key={line} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
                 <View {...decorative} style={{ paddingTop: 2 }}>
                   <Lineicons icon={CheckCircle1Outlined} size={18} color={t.accentText} />
                 </View>
-                <Text style={[textStyle('body', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>{line}</Text>
+                <Text role="body" style={{ flex: 1 }}>{line}</Text>
               </View>
             ))}
           </View>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{STILL_FREE}</Text>
+          <Text role="footnote" color={t.textSecondary}>{STILL_FREE}</Text>
         </View>
 
         {statusMessage ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            aria-live="polite"
-            style={textStyle('body', t.textPrimary)}
-            maxFontSizeMultiplier={2}
-          >
+          <Text role="body" accessibilityLiveRegion="polite" aria-live="polite">
             {statusMessage}
           </Text>
         ) : null}
         {phase === 'error' && error ? (
-          <Text accessibilityRole="alert" style={textStyle('body', t.danger)} maxFontSizeMultiplier={2}>{error}</Text>
+          <Text role="body" color={t.danger} accessibilityRole="alert">{error}</Text>
         ) : null}
 
         {owned ? (
@@ -229,21 +226,21 @@ export default function UpgradeScreen() {
         ) : (
           <View style={{ gap: spacing.md }}>
             <View style={{ gap: spacing.xs }}>
-              <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{priceText}</Text>
-              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+              <Text role="headline">{priceText}</Text>
+              <Text role="footnote" color={t.textSecondary}>
                 Not a subscription. You pay once and Full Access stays on your account.
               </Text>
             </View>
 
             {signedIn === null ? null : signedIn === false ? (
               <View style={{ gap: spacing.sm }}>
-                <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
+                <Text role="body">
                   Sign in first. Full Access belongs to your account, so it works on every device you sign in to.
                 </Text>
                 <Button label="Sign in to continue" size="lg" fullWidth onPress={() => router.push(signInHref)} />
               </View>
             ) : !canBuy ? (
-              <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>Not available on this device yet.</Text>
+              <Text role="body">Not available on this device yet.</Text>
             ) : phase === 'pending' ? (
               <Button label="Check again" size="lg" fullWidth onPress={() => void checkAgain()} />
             ) : phase === 'error' ? (
@@ -275,21 +272,21 @@ export default function UpgradeScreen() {
               />
             ) : null}
 
-            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+            <Text role="footnote" color={t.textSecondary}>
               Under 18? Ask your parent or guardian before you buy.
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.xs }}>
-              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>By buying you agree to the</Text>
-              <Pressable
+              <Text role="footnote" color={t.textSecondary}>By buying you agree to the</Text>
+              <PressableScale
                 accessibilityRole="link"
                 accessibilityLabel="Terms of Service"
                 onPress={() => router.push('/terms')}
-                style={(s) => [{ minHeight: 44, justifyContent: 'center' }, focusRing(t.focusRing, (s as WebPressableState).focused)]}
+                style={({ focused }) => [{ minHeight: 44, justifyContent: 'center' }, focusRing(t.focusRing, focused)]}
               >
-                <Text style={[textStyle('label', t.accentText), { textDecorationLine: 'underline' }]} maxFontSizeMultiplier={2}>
+                <Text role="footnote" color={t.accentText} style={[weight('600'), { textDecorationLine: 'underline' }]}>
                   Terms of Service
                 </Text>
-              </Pressable>
+              </PressableScale>
             </View>
           </View>
         )}

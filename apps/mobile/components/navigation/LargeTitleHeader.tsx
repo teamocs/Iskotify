@@ -6,7 +6,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTheme } from '../../theme/ThemeContext'
-import { iosTextStyle, layout, motion, spacing, textStyle, weight } from '../../theme/tokens'
+import { iosTextStyle, layout, motion, spacing, weight } from '../../theme/tokens'
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { Glass } from '../ui/Glass'
 
@@ -169,6 +169,9 @@ interface Props {
   /** Replaces the large title text with a custom heading (Today's greeting);
    *  `title` still names the collapsed band. */
   children?: ReactNode
+  /** False under a fixed top bar (DetailTopBar): the title stays a plain
+   *  header and never collapses into a band that would cover the bar. */
+  collapses?: boolean
   testID?: string
 }
 
@@ -177,10 +180,10 @@ interface Props {
  * (Screen with `headerScrolls`, or as the first child of a scrolling Screen).
  * Without a band host it is a plain header.
  */
-export function LargeTitleHeader({ title, subtitle, eyebrow, actions, children, testID = 'large-title-header' }: Props) {
+export function LargeTitleHeader({ title, subtitle, eyebrow, actions, children, collapses = true, testID = 'large-title-header' }: Props) {
   const { theme: t } = useTheme()
   const host = useContext(BandHostContext)
-  const register = host?.register
+  const register = collapses ? host?.register : undefined
   const contentTop = host?.contentTop ?? 0
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
@@ -213,7 +216,7 @@ export function LargeTitleHeader({ title, subtitle, eyebrow, actions, children, 
               {title}
             </Text>
             {subtitle ? (
-              <Text style={[textStyle('bodySm', t.textSecondary), { marginTop: 2 }]} maxFontSizeMultiplier={1.4}>
+              <Text style={[iosTextStyle('footnote', t.textSecondary), { marginTop: 2 }]} maxFontSizeMultiplier={1.4}>
                 {subtitle}
               </Text>
             ) : null}

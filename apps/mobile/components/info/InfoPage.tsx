@@ -1,7 +1,8 @@
-import { View, Text, KeyboardAvoidingView, Platform } from 'react-native'
+import { View, KeyboardAvoidingView, Platform } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing } from '../../theme/tokens'
 import { Screen } from '../ui/Screen'
+import { Text } from '../ui/Text'
 import { DetailTopBar } from '../explore/DetailTopBar'
 import { heading } from '../ui/a11y'
 
@@ -27,9 +28,9 @@ export function InfoPage({ title, lead, fallbackHref = '/settings', above, child
     <Screen header={<DetailTopBar bare fallbackHref={fallbackHref} />} width="reading">
       <View style={{ gap: spacing.sm, paddingTop: spacing.sm, marginBottom: spacing.xxl }}>
         {above}
-        <Text {...heading(1)} style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.6}>{title}</Text>
+        <Text role="title1" {...heading(1)} maxFontSizeMultiplier={1.6}>{title}</Text>
         {lead ? (
-          <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{lead}</Text>
+          <Text role="body" color={t.textSecondary}>{lead}</Text>
         ) : null}
       </View>
       {children}
@@ -44,20 +45,19 @@ export function InfoPage({ title, lead, fallbackHref = '/settings', above, child
 
 /** A titled prose section: level-2 heading, then paragraphs. */
 export function InfoSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const { theme: t } = useTheme()
   return (
     <View style={{ gap: spacing.sm, marginBottom: spacing.xxl }}>
-      <Text {...heading(2)} style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>{title}</Text>
+      <Text role="title3" {...heading(2)} maxFontSizeMultiplier={1.6}>{title}</Text>
       {children}
     </View>
   )
 }
 
-/** Body paragraph at reading size (16/24), secondary ink. */
+/** Body paragraph at reading size (body, 17/22), secondary ink. */
 export function Prose({ children, selectable }: { children: React.ReactNode; selectable?: boolean }) {
   const { theme: t } = useTheme()
   return (
-    <Text selectable={selectable} style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+    <Text role="body" color={t.textSecondary} selectable={selectable}>
       {children}
     </Text>
   )

@@ -31,7 +31,6 @@
  *      time/accuracy aggregates that don't need a topic.
  */
 
-import { scoreBand, type ScoreBand } from '../utils/examBuilder'
 import { isMockSession, sittingKey, countSittings, weightedAccuracy } from '../utils/sessionKind'
 
 // ── Shared input shape ───────────────────────────────────────────────────────
@@ -284,23 +283,20 @@ export function computeAccuracyTrend(
   return points
 }
 
-// ── Score band history (no new table — derived from practice_sessions) ──────
-// Fix 3 (exam safety): this was "percentile band history" — the "percentile"
-// was raw % correct relabeled, and fed cut-off verdict pills elsewhere. No
-// percentile concept remains; each attempt keeps only its raw pct + a
-// descriptive, non-judgemental band.
+// ── Mock attempt history (no new table — derived from practice_sessions) ────
+// Fix 3 (exam safety) dropped the fake "percentile"; P4 (2026-10) drops the
+// score band too. An attempt is its raw % correct and its date: no band, no
+// blurb, no verdict of any kind.
 
 export interface MockAttemptScore {
   listingSlug: string
   completedAt: number
   pct: number
-  band: string
-  blurb: string
 }
 
 /**
  * computeMockAttemptHistory — one entry per full mock-exam ATTEMPT (not per
- * section row), each scored through scoreBand. Mirrors
+ * section row), as a raw % correct. Mirrors
  * homeAggregates.ts's getListingMockBest (SQL there; plain JS here since
  * useAnalytics.ts already has the full sessions array in memory) — a mock
  * attempt writes one practice_sessions row per section, all sharing one
@@ -339,10 +335,31 @@ export function computeMockAttemptHistory(
   }
 
   return Array.from(grouped.values())
-    .map(v => {
-      const pct = Math.round((v.score / v.total) * 100)
-      const band: ScoreBand = scoreBand(pct)
-      return { listingSlug: v.listingSlug, completedAt: v.completedAt, pct, ...band }
-    })
+    .map(v => ({ listingSlug: v.listingSlug, completedAt: v.completedAt, pct: Math.round((v.score / v.total) * 100) }))
     .sort((a, b) => a.completedAt - b.completedAt)
+}
+
+// ── Practice accuracy per exam (Progress's exam readiness rings) ────────────
+
+/**
+ * computeListingAccuracy — weighted accuracy (sum score / sum total) per
+ * listing slug. A listing with no answered questions is left out, so the UI
+ * says "No practice yet" instead of drawing a 0% ring.
+ */
+export function computeListingAccuracy(
+  sessions: { listingSlug: string; score: number; total: number }[],
+): Record<string, number> {
+  const bySlug = new Map<string, { score: number; total: number }[]>()
+  for (const s of sessions) {
+    if (!s.listingSlug) continue
+    const rows = bySlug.get(s.listingSlug) ?? []
+    rows.push(s)
+    bySlug.set(s.listingSlug, rows)
+  }
+  const out: Record<string, number> = {}
+  for (const [slug, rows] of bySlug) {
+    const acc = weightedAccuracy(rows)
+    if (acc !== null) out[slug] = acc
+  }
+  return out
 }

@@ -1,6 +1,8 @@
 import React from 'react'
 import { render, screen, fireEvent, act, within } from '@testing-library/react-native'
 import NotesScreen from '../index'
+import { Sheet } from '../../../components/ui/Sheet'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
 
 const mockPush = jest.fn()
 jest.mock('expo-router', () => ({
@@ -128,7 +130,7 @@ describe('Notes list', () => {
   it('draws checklist previews without glyph bullets', () => {
     render(<NotesScreen />)
     expect(screen.getByText('Form 138')).toBeTruthy()
-    expect(screen.queryByText(/[✓○]/)).toBeNull()
+    expect(screen.queryByText(/[\u2713\u25CB]/)).toBeNull()
   })
 
   it('opens a note on press', () => {
@@ -148,20 +150,38 @@ describe('Notes list', () => {
     }
   })
 
-  it('on phones the "New note" FAB is 56pt and opens the type chooser', () => {
+  it('on phones the "New note" FAB is the one primary action and opens the type chooser on the P3 Sheet', () => {
     render(<NotesScreen />)
     const fab = screen.getByRole('button', { name: 'New note' })
-    expect(screen.getByTestId('notes-fab')).toBe(fab)
+    expect(screen.getByTestId('primary-action')).toBe(fab)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
     fireEvent.press(fab)
-    expect(screen.getByRole('button', { name: /Text note/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Checklist/ })).toBeTruthy()
+    const sheet = screen.UNSAFE_getByType(Sheet)
+    expect(sheet.props.visible).toBe(true)
+    expect(sheet.props.title).toBe('New note')
+    const chooser = screen.getByTestId('note-type-chooser')
+    expect(within(chooser).getByRole('button', { name: /Text note/ })).toBeTruthy()
+    expect(within(chooser).getByRole('button', { name: /Checklist/ })).toBeTruthy()
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 
-  it('on desktop "New note" is a header button, not a floating FAB', () => {
+  it('on desktop "New note" is the header primary button, not a floating FAB', () => {
     mockBp.value = 'expanded'
     render(<NotesScreen />)
     expect(screen.getAllByRole('button', { name: 'New note' })).toHaveLength(1)
-    expect(screen.queryByTestId('notes-fab')).toBeNull()
+    expect(screen.queryByTestId('primary-action')).toBeNull()
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+  })
+
+  it('selection mode keeps at most one primary action (bar actions are secondary, danger or ghost)', () => {
+    for (const bp of ['compact', 'expanded'] as const) {
+      mockBp.value = bp
+      const { unmount } = render(<NotesScreen />)
+      fireEvent(screen.getByRole('button', { name: /Physics formulas/ }), 'longPress')
+      expect(screen.getByText('1 selected')).toBeTruthy()
+      expect(countPrimaryActions(screen.UNSAFE_root)).toBeLessThanOrEqual(1)
+      unmount()
+    }
   })
 
   it('creates a note of the chosen type and opens it', async () => {

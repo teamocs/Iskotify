@@ -11,7 +11,7 @@ import { TabHeader } from '../../components/TabHeader'
 export default function ProgressScreen() {
   return (
     <Screen scroll={false} width="wide">
-      <AnalyticsDashboard header={<TabHeader title="Progress" subtitle="How your practice is going, over time" />} />
+      <AnalyticsDashboard header={<TabHeader title="Progress" eyebrow="This week" />} />
     </Screen>
   )
 }

@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import { Alert } from 'react-native'
 import ProfileScreen from '../index'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
 
 jest.mock('expo-router', () => ({
   router: {
@@ -33,6 +34,8 @@ jest.mock('@lineiconshq/free-icons', () => ({
   ChevronUpOutlined: {},
   ChevronDownOutlined: {},
   XmarkOutlined: {},
+  PlusOutlined: {}, Bell1Outlined: {}, TrendUp1Outlined: {}, GraduationCap1Outlined: {}, Download1Outlined: {},
+  Comment1Outlined: {}, Bug1Outlined: {}, Shield2Outlined: {}, ClipboardOutlined: {}, ExitOutlined: {}, Trash3Outlined: {},
 }))
 
 
@@ -72,6 +75,12 @@ const mockPremium = { enabled: false, isPremium: false, unlimited: true, loading
 jest.mock('../../../hooks/usePremium', () => ({ usePremium: () => mockPremium }))
 const mockSignOutPremium = jest.fn(async (..._a: unknown[]) => undefined)
 jest.mock('../../../services/premiumState', () => ({ signOutPremium: (...a: unknown[]) => mockSignOutPremium(...a) }))
+
+// P4: the Study group's reminders switch. Scheduling needs the focused
+// exams' dates, so the screen reads them the way Settings does.
+const mockNotif = { enabled: true, toggle: jest.fn(async (..._a: unknown[]) => undefined), dailyReminderHour: 9 }
+jest.mock('../../../hooks/useNotifications', () => ({ useNotifications: () => mockNotif }))
+jest.mock('../../../hooks/useHomeStats', () => ({ useHomeStats: () => ({ focusedListings: [{ slug: 'upcat', title: 'UPCAT', examDate: null, deadline: null }] }) }))
 
 jest.mock('../../../services/webReset', () => ({
   clearWebData: jest.fn().mockResolvedValue(undefined),
@@ -211,9 +220,48 @@ describe('ProfileScreen — empty DB', () => {
     expect(texts.join(' ')).not.toMatch(/[\p{Extended_Pictographic}↪⚠⠿›]/u)
   })
 
-  it('renders My Focus List section', () => {
+  it('renders the Exams in focus group', () => {
     render(<ProfileScreen />)
-    expect(screen.getByText('My Focus List')).toBeTruthy()
+    expect(screen.getByRole('header', { name: 'Exams in focus' })).toBeTruthy()
+  })
+
+  // P4: inset grouped sections in the iOS order.
+  it('groups its rows under Study, Account and Help, then a destructive Sign out', async () => {
+    render(<ProfileScreen />)
+    await screen.findByText('Student')
+    for (const name of ['Study', 'Account', 'Help']) {
+      expect(screen.getByRole('header', { name })).toBeTruthy()
+    }
+    const { IconTile } = require('../../../components/ui/InsetGroup')
+    expect(screen.UNSAFE_root.findAll((n: any) => n.type === IconTile).length).toBeGreaterThan(5)
+  })
+
+  it('Study reminders is one whole-row switch that toggles the notifications', async () => {
+    mockNotif.toggle.mockClear()
+    render(<ProfileScreen />)
+    const row = await screen.findByRole('switch', { name: 'Study reminders' })
+    expect(screen.getByRole('switch', { name: 'Study reminders', checked: true })).toBeTruthy()
+    fireEvent.press(row)
+    expect(mockNotif.toggle).toHaveBeenCalledWith([{ slug: 'upcat', title: 'UPCAT', examDate: null, deadline: null }])
+  })
+
+  it('Help links open feedback, the bug report, privacy and terms', () => {
+    const { router } = require('expo-router')
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Leave feedback' }))
+    expect(router.push).toHaveBeenCalledWith('/settings/leave-feedback')
+    fireEvent.press(screen.getByRole('button', { name: 'Report a bug' }))
+    expect(router.push).toHaveBeenCalledWith('/settings/report-bug')
+    fireEvent.press(screen.getByRole('button', { name: 'Privacy policy' }))
+    expect(router.push).toHaveBeenCalledWith('/privacy')
+    fireEvent.press(screen.getByRole('button', { name: 'Terms of service' }))
+    expect(router.push).toHaveBeenCalledWith('/terms')
+  })
+
+  it('has one primary action when signed out (Sign in with Google)', async () => {
+    render(<ProfileScreen />)
+    await screen.findByText('Sign in with Google')
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 
   it('renders Export Data card', () => {
@@ -255,18 +303,19 @@ describe('ProfileScreen — with user data', () => {
     })
   })
 
-  it('displays the school', async () => {
+  it('header card: a 60pt avatar, the name and a grade, school and city subtitle', async () => {
+    const { Avatar } = require('../../../components/ui/Avatar')
     render(<ProfileScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('UPLB')).toBeTruthy()
-    })
+    expect(await screen.findByText('Grade 11 · UPLB')).toBeTruthy()
+    const avatar = screen.UNSAFE_root.findAll((n: any) => n.type === Avatar)[0]
+    expect(avatar.props.size).toBe(60)
+    expect(avatar.props.name).toBe('Maria Santos')
   })
 
-  it('displays the grade chip', async () => {
+  it('has no primary action when signed in (nothing to sign in to)', async () => {
     render(<ProfileScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('G11')).toBeTruthy()
-    })
+    await screen.findByText('Signed in')
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(0)
   })
 
   it('shows Google row when googleId is present', async () => {
@@ -597,9 +646,9 @@ describe('ProfileScreen — Delete account', () => {
     expect(screen.queryByRole('button', { name: /^Delete account/ })).toBeNull()
   })
 
-  it('uses danger styling for the row icon (token, not a hex)', async () => {
+  it('uses danger styling for the row (icon tone and title, tokens not hex)', async () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.tsx'), 'utf8')
-    expect(src).toMatch(/title="Delete account"[\s\S]{0,400}t\.danger/)
+    expect(src).toMatch(/title="Delete account"[\s\S]{0,400}iconTone="danger"[\s\S]{0,200}destructive/)
   })
 
   it('opens the confirmation sheet, which does not delete anything yet', async () => {

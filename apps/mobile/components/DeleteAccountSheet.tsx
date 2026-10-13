@@ -3,7 +3,7 @@ import { Text, View } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Trash3Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, textStyle } from '../theme/tokens'
+import { spacing, iosTextStyle } from '../theme/tokens'
 import { useDb } from '../hooks/useDb'
 import { Sheet } from './ui/Sheet'
 import { Button } from './ui/Button'
@@ -77,25 +77,25 @@ export function DeleteAccountSheet({ visible, onClose, onDeleted }: Props) {
       }
     >
       <View style={{ gap: spacing.md }}>
-        <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
+        <Text style={iosTextStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
           This permanently deletes:
         </Text>
         <View style={{ gap: spacing.xs }}>
           {DELETED.map(line => (
             <View key={line} style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View {...decorative} style={{ width: 5, height: 5, borderRadius: 3, marginTop: 10, backgroundColor: t.textSecondary }} />
-              <Text style={[textStyle('body', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>{line}</Text>
+              <Text style={[iosTextStyle('body', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>{line}</Text>
             </View>
           ))}
         </View>
-        <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
+        <Text style={iosTextStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
           This can’t be undone.
         </Text>
 
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+        <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
           We keep nothing about you afterwards, except the purchase records tax law requires if you bought Full Access, no longer linked to you.
         </Text>
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+        <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
           Your notes on this device stay until you delete them from Notes. Usage analytics are not removed by this button; email teamocsph@gmail.com and we will delete what is linked to you.
         </Text>
 
@@ -112,7 +112,7 @@ export function DeleteAccountSheet({ visible, onClose, onDeleted }: Props) {
         />
 
         {error ? (
-          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={textStyle('bodySm', t.danger)} maxFontSizeMultiplier={2}>
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={iosTextStyle('footnote', t.danger)} maxFontSizeMultiplier={2}>
             {error}
           </Text>
         ) : null}

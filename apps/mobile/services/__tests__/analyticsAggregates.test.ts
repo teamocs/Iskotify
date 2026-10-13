@@ -12,6 +12,7 @@ import {
   resolveMissedTopicLabels,
   computeAccuracyTrend,
   computeMockAttemptHistory,
+  computeListingAccuracy,
   type AttemptRecord,
 } from '../analyticsAggregates'
 
@@ -231,7 +232,7 @@ describe('computeMockAttemptHistory', () => {
     expect(computeMockAttemptHistory([])).toEqual([])
   })
 
-  it('groups multi-section mock rows into one attempt per start time and applies scoreBand (Fix 3: no percentile field)', () => {
+  it('groups multi-section mock rows into one attempt per start time, as a neutral number (no band, no percentile)', () => {
     const startTime = 1_700_000_000_000
     const durationSecs = 3600
     const completedAt = startTime + durationSecs * 1000
@@ -242,8 +243,11 @@ describe('computeMockAttemptHistory', () => {
     const history = computeMockAttemptHistory(sessions)
     expect(history).toHaveLength(1)
     expect(history[0]!.pct).toBe(Math.round(((18 + 16) / 40) * 100)) // 85%
-    expect(history[0]!.band).toBe('Competitive')
+    // P4: no verdict. The attempt is its number, never a band or a blurb.
+    expect(history[0]).not.toHaveProperty('band')
+    expect(history[0]).not.toHaveProperty('blurb')
     expect(history[0]).not.toHaveProperty('percentile')
+    expect(Object.keys(history[0]!).sort()).toEqual(['completedAt', 'listingSlug', 'pct'])
   })
 
   it('excludes topic-review sessions (topicId non-empty) — only full mock sentinel rows count', () => {
@@ -303,5 +307,37 @@ describe('computeMockAttemptHistory — kind / attempt_key (A10)', () => {
   it('legacy rows (no kind) keep the old inference', () => {
     const history = computeMockAttemptHistory([row({ kind: null, attemptKey: null })] as any)
     expect(history).toHaveLength(1)
+  })
+})
+
+// ── P4: no verdicts anywhere in analytics output ─────────────────────────────
+
+const VERDICT = /(?:Top tier|Competitive|Developing|Foundational|Below cut-?off|Above cut-?off|Excellent|Needs work|Poor|Strong|Weak|Getting there|Behind|On pace|On track|Pass(?:ed|ing)?|Fail(?:ed|ing)?)/i
+
+describe('analytics output carries no verdicts (P4)', () => {
+  it('mock history serialises to numbers and dates only', () => {
+    const rows = [0, 30, 55, 80, 95].map((pct, i) => ({
+      listingSlug: 'upcat', topicId: '', subtest: 'Mathematics', score: pct, total: 100,
+      completedAt: 1_000_000 + i * 10_000_000, durationSecs: 60, kind: 'mock', attemptKey: i + 1,
+    }))
+    const out = JSON.stringify(computeMockAttemptHistory(rows))
+    expect(out).not.toMatch(VERDICT)
+  })
+
+  it('the module no longer imports scoreBand', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'analyticsAggregates.ts'), 'utf8')
+    expect(src).not.toMatch(/scoreBand|ScoreBand/)
+  })
+})
+
+describe('computeListingAccuracy', () => {
+  it('weights each listing by question count and skips listings with no answered questions', () => {
+    const acc = computeListingAccuracy([
+      { listingSlug: 'upcat', score: 1, total: 1 },
+      { listingSlug: 'upcat', score: 1, total: 9 },
+      { listingSlug: 'acet', score: 0, total: 0 },
+      { listingSlug: 'dcat', score: 7, total: 10 },
+    ])
+    expect(acc).toEqual({ upcat: 20, dcat: 70 })
   })
 })

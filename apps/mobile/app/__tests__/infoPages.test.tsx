@@ -10,7 +10,11 @@ import HelpScreen from '../help'
 import AboutScreen from '../about'
 import PrivacyScreen from '../privacy'
 import TermsScreen from '../terms'
+import * as fs from 'fs'
+import * as path from 'path'
 import { aria } from '../../test-utils/aria'
+import { countPrimaryActions } from '../../test-utils/primaryActions'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
 import { PRIVACY_LAST_UPDATED, PRIVACY_SECTIONS } from '@iskotify/utils/privacy-policy'
 import { TERMS_LAST_UPDATED, TERMS_SECTIONS } from '@iskotify/utils/terms-of-service'
 
@@ -49,14 +53,20 @@ beforeEach(() => {
   mockBp = 'expanded'
 })
 
+// [name, screen, title, primary actions]: Help's only primary is the tour.
 const PAGES = [
-  ['Help', HelpScreen, 'Help and support'],
-  ['About', AboutScreen, 'About Iskotify'],
-  ['Privacy', PrivacyScreen, 'Privacy policy'],
-  ['Terms', TermsScreen, 'Terms of service'],
+  ['Help', HelpScreen, 'Help and support', 1],
+  ['About', AboutScreen, 'About Iskotify', 0],
+  ['Privacy', PrivacyScreen, 'Privacy policy', 0],
+  ['Terms', TermsScreen, 'Terms of service', 0],
 ] as const
 
-describe.each(PAGES)('%s page', (_n, Page, title) => {
+describe.each(PAGES)('%s page', (_n, Page, title, primaries) => {
+  it('has at most one primary action', () => {
+    render(<Page />)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(primaries)
+  })
+
   it('has exactly one level-1 heading, the page title', () => {
     render(<Page />)
     const h1s = screen.getAllByRole('header').filter(h => aria(h, 'aria-level') === 1)
@@ -212,5 +222,39 @@ describe('About copy', () => {
     render(<AboutScreen />)
     expect(screen.getByText('Para sa mga Iskolar ng Bayan')).toBeTruthy()
     expect(screen.queryByText(/AI-enhanced|ultimate|confidently pass/i)).toBeNull()
+  })
+})
+
+describe('About: version facts are an inset grouped list', () => {
+  it('shows version, platforms and maker as rows of one group', () => {
+    render(<AboutScreen />)
+    expect(screen.UNSAFE_getAllByType(InsetGroup)).toHaveLength(1)
+    const rows = screen.UNSAFE_getAllByType(InsetRow).map(r => [r.props.title, r.props.value])
+    expect(rows).toEqual([
+      ['App version', 'v1.2.3'],
+      ['Available on', 'Android and web'],
+      ['Made by', 'Team OCSPH'],
+    ])
+  })
+})
+
+// iOS-language redesign P4: these pages use the iOS text roles and shape scale.
+describe.each([
+  'app/about.tsx', 'app/help.tsx', 'app/privacy.tsx', 'app/terms.tsx', 'components/info/InfoPage.tsx',
+])('%s design (P4)', (rel) => {
+  const src = fs.readFileSync(path.join(__dirname, '../..', rel), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+
+  it('uses <Text role> only: no textStyle(), typography or retired role names', () => {
+    expect(src).not.toMatch(/\btextStyle\(|\btypo\b|\btypography\./)
+    expect(src).not.toMatch(/\brole=["'](?:display|title|titleSm|bodySm|label|button)["']/)
+  })
+
+  it('uses the iOS radius scale, not the legacy aliases', () => {
+    expect(src).not.toMatch(/\bradius\.(?:md|lg|xl|xxl|pill)\b/)
+  })
+
+  it('presses through PressableScale, never a bare Pressable, Touchable or Modal', () => {
+    expect(src).not.toMatch(/import\s*\{[^}]*\b(?:Pressable|TouchableOpacity|TouchableHighlight|Modal)\b[^}]*\}\s*from\s*'react-native'/)
   })
 })

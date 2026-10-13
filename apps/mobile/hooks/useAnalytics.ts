@@ -3,13 +3,13 @@ import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { practiceSessions, topics, savedDecks, questionAttempts } from '../db/schema'
 import { resolveTopicLabel } from '../utils/topicLabel'
-import { isProgressSession, weightedAccuracy, countSittings } from '../utils/sessionKind'
+import { isProgressSession, weightedAccuracy, countSittings, sittingKey } from '../utils/sessionKind'
 import { cachedQuery, subscribe } from '../services/queryCache'
 import { getPracticeDayIndices } from '../services/homeAggregates'
 import { computeStreakFromDays, localDayOffsetMs } from './useHomeStats'
 import {
   computeAvgTimePerQuestion, computeMostMissedTopics, resolveMissedTopicLabels,
-  computeAccuracyTrend, computeMockAttemptHistory,
+  computeAccuracyTrend, computeMockAttemptHistory, computeListingAccuracy,
   type AvgTimeResult, type ResolvedMissedTopic, type TrendPoint, type MockAttemptScore,
 } from '../services/analyticsAggregates'
 
@@ -17,6 +17,8 @@ export interface WeeklyBar {
   dayLabel: string
   accuracy: number | null
   sessionCount: number
+  /** Minutes of practice that day (a mock sitting counted once). */
+  minutes: number
 }
 
 export interface TopicMastery {
@@ -49,8 +51,10 @@ export interface AnalyticsData {
   mostMissedTopics: ResolvedMissedTopic[]
   /** Task G: 8-week accuracy trend — a longer window than weeklyData's fixed 7 days. */
   accuracyTrend: TrendPoint[]
-  /** Score-band history across full mock-exam attempts, oldest first (Fix 3: no percentile). */
+  /** Raw % correct of each full mock-exam attempt, oldest first (no band, no percentile). */
   mockAttemptHistory: MockAttemptScore[]
+  /** Practice accuracy per exam slug (every exam, whatever the filter); absent = no practice yet. */
+  examAccuracy: Record<string, number>
   isLoading: boolean
   /** The last load failed (Progress shows an ErrorState with a retry). */
   error: boolean
@@ -139,6 +143,25 @@ export function computeTopicMastery(
 // pair the Home screen uses, so the Exams-tab stats row, AnalyticsDashboard and
 // Home always agree. Per-listing dashboards intentionally show this global streak.
 
+/**
+ * Minutes studied across rows. A mock writes one row per section, all of the
+ * same sitting, so each sitting counts once at its longest row (never summed).
+ */
+function studyMinutes(rows: { completedAt: number; attemptKey?: number | null; durationSecs?: number }[]): number {
+  const bySitting = new Map<string, number>()
+  for (const r of rows) {
+    const secs = Math.max(0, r.durationSecs ?? 0)
+    if (secs === 0) continue
+    const key = r.attemptKey != null
+      ? `a:${r.attemptKey}`
+      : `l:${sittingKey({ completedAt: r.completedAt, durationSecs: secs })}`
+    bySitting.set(key, Math.max(bySitting.get(key) ?? 0, secs))
+  }
+  let total = 0
+  for (const secs of bySitting.values()) total += secs
+  return Math.round(total / 60)
+}
+
 export function computeWeeklyData(
   sessions: { completedAt: number; score: number; total: number; attemptKey?: number | null; durationSecs?: number }[]
 ): WeeklyBar[] {
@@ -151,7 +174,12 @@ export function computeWeeklyData(
     const start = d.getTime()
     const daySessions = sessions.filter(s => s.completedAt >= start && s.completedAt < start + dayMs && s.total > 0)
     // Weighted by question count; sessionCount = sittings (a mock's section rows are one).
-    bars.push({ dayLabel: DAY_LABELS[d.getDay()]!, accuracy: weightedAccuracy(daySessions), sessionCount: countSittings(daySessions) })
+    bars.push({
+      dayLabel: DAY_LABELS[d.getDay()]!,
+      accuracy: weightedAccuracy(daySessions),
+      sessionCount: countSittings(daySessions),
+      minutes: studyMinutes(sessions.filter(s => s.completedAt >= start && s.completedAt < start + dayMs)),
+    })
   }
   return bars
 }
@@ -162,7 +190,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
     sessionCount: 0, avgAccuracy: null, streak: 0,
     weeklyData: [], topicMastery: [], recentSessions: [],
     avgTime: { overallAvgMs: null, overallCount: 0, bySubject: [] },
-    mostMissedTopics: [], accuracyTrend: [], mockAttemptHistory: [],
+    mostMissedTopics: [], accuracyTrend: [], mockAttemptHistory: [], examAccuracy: {},
     isLoading: true,
     error: false,
   })
@@ -237,10 +265,11 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
           .slice(0, MOST_MISSED_LIMIT)
         const accuracyTrend = computeAccuracyTrend(filtered)
         const mockAttemptHistory = computeMockAttemptHistory(filtered)
+        const examAccuracy = computeListingAccuracy(progressSessions)
 
         return {
           sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions,
-          avgTime, mostMissedTopics, accuracyTrend, mockAttemptHistory,
+          avgTime, mostMissedTopics, accuracyTrend, mockAttemptHistory, examAccuracy,
           isLoading: false,
           error: false,
         }

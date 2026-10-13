@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { View, Text, ScrollView, RefreshControl, Pressable, Platform } from 'react-native'
+import { View, ScrollView, RefreshControl, Platform } from 'react-native'
 import Animated, { useAnimatedRef } from 'react-native-reanimated'
 import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
 import { useBandScrollY } from '../navigation/LargeTitleHeader'
@@ -14,22 +14,24 @@ import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { useTheme } from '../../theme/ThemeContext'
-import { layout, spacing, textStyle } from '../../theme/tokens'
+import { layout, spacing } from '../../theme/tokens'
 import { Card } from '../ui/Card'
 import { FilterChip } from '../ui/Chip'
 import { StatNumber } from '../ui/StatNumber'
 import { ProgressBar } from '../ui/ProgressBar'
-import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Skeleton } from '../ui/Skeleton'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorState } from '../ui/ErrorState'
 import { TwoColumn } from '../ui/TwoColumn'
-import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
+import { Text } from '../ui/Text'
+import { PressableScale } from '../ui/Pressable'
+import { decorative, focusRing } from '../ui/a11y'
 import { ProgressSection } from './ProgressSection'
 import { SubjectReadinessList } from './SubjectReadinessList'
 import { WeeklyChart } from './WeeklyChart'
 import { TrendLineChart } from './TrendLineChart'
+import { ExamReadinessCard } from './ExamReadinessCard'
 import type { ResolvedMissedTopic, MockAttemptScore } from '../../services/analyticsAggregates'
 
 /** Formats elapsedMs as "42s" or "1m 08s" for the Pace section. */
@@ -48,22 +50,27 @@ function missedTopicHref(topicId: string, listingSlug: string): string {
 const SHORT_DATE = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric' })
 const fmtDate = (ts: number) => SHORT_DATE.format(new Date(ts))
 
-function accuracyTone(pct: number): 'success' | 'warning' | 'danger' {
-  return pct >= 80 ? 'success' : pct >= 60 ? 'warning' : 'danger'
-}
-
 /** A row that separates itself from the one above with a hairline. */
 function Row({ first, children }: { first: boolean; children: React.ReactNode }) {
   const { theme: t } = useTheme()
   return (
     <View
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 48, paddingVertical: spacing.sm,
+        flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: layout.rowMinHeight + 4, paddingVertical: spacing.sm,
         borderTopWidth: first ? 0 : 1, borderTopColor: t.divider,
       }}
     >
       {children}
     </View>
+  )
+}
+
+/** A trailing number in a row: tabular, so a column of them lines up. */
+function RowNumber({ children }: { children: React.ReactNode }) {
+  return (
+    <Text role="headline" maxFontSizeMultiplier={1.5} style={{ fontVariant: ['tabular-nums'] }}>
+      {children}
+    </Text>
   )
 }
 
@@ -77,9 +84,11 @@ interface Props {
 }
 
 /**
- * Progress: readiness and analytics (redesign M2). Summary numbers first as
- * tabular StatNumbers, then the charts and readiness side by side on
- * expanded widths; secondary detail sits behind disclosures.
+ * Progress: readiness and analytics (redesign M2, iOS language P4). Exam
+ * readiness rings first, then the habit tiles (tabular StatNumbers), study
+ * time and readiness side by side on expanded widths; secondary detail sits
+ * behind disclosures. Every figure is a neutral number: no verdict, no
+ * pass/fail band, no pace status (owner, 2026-10-13).
  */
 export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = true, header }: Props) {
   const { theme: t } = useTheme()
@@ -111,10 +120,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     : (focusListings.find(l => l.slug === activeSlug)?.title ?? activeSlug)
 
   const activeDays = analytics.weeklyData.filter(d => d.sessionCount > 0).length
-  const weekWithAcc = analytics.weeklyData.filter(d => d.accuracy !== null)
-  const weekAvg = weekWithAcc.length > 0
-    ? Math.round(weekWithAcc.reduce((sum, d) => sum + (d.accuracy ?? 0), 0) / weekWithAcc.length)
-    : null
+  const weekMinutes = analytics.weeklyData.reduce((sum, d) => sum + (d.minutes ?? 0), 0)
 
   const trendKnown = analytics.accuracyTrend.filter(p => p.accuracy !== null)
   const paceSummary = analytics.avgTime.overallAvgMs !== null
@@ -124,6 +130,8 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     ? `${analytics.mostMissedTopics.length} area${analytics.mostMissedTopics.length !== 1 ? 's' : ''} to review`
     : 'No mistakes tracked yet'
   const latestMock = analytics.mockAttemptHistory[analytics.mockAttemptHistory.length - 1]
+  const examAccuracy = analytics.examAccuracy ?? {}
+  const examRings = examFilters.map(fl => ({ slug: fl.slug, title: fl.title, pct: examAccuracy[fl.slug] ?? null }))
 
   const TOP_N = 3
   const sessions = showAllSessions ? analytics.recentSessions : analytics.recentSessions.slice(0, TOP_N)
@@ -169,39 +177,41 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     )
   } else {
     const twoUp = bp !== 'compact'
-    const stat = { flexBasis: twoUp ? '22%' : '45%', flexGrow: 1 } as const
+    const tile = { flexBasis: twoUp ? '22%' : '45%', flexGrow: 1 } as const
     content = (
       <View style={{ gap: spacing.xxl }}>
-        {/* Summary: four numbers that matter, tabular so they don't jitter. */}
+        {examRings.length > 0 ? <ExamReadinessCard items={examRings} /> : null}
+
+        {/* Habit tiles: real counts only, tabular so they don't jitter. */}
         <Card>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.lg, columnGap: spacing.md }}>
-            <View style={stat}><StatNumber value={analytics.sessionCount} label="Sessions" /></View>
-            <View style={stat}>
-              <StatNumber value={analytics.avgAccuracy !== null ? `${analytics.avgAccuracy}%` : '—'} label="Average accuracy" />
-            </View>
-            <View style={stat}>
+            <View testID="habit-tile" style={tile}>
               <StatNumber
                 value={analytics.streak}
                 unit={analytics.streak === 1 ? 'day' : 'days'}
                 label="Day streak"
               />
             </View>
-            <View style={stat}><StatNumber value={activeDays} label="Active days this week" /></View>
+            <View testID="habit-tile" style={tile}><StatNumber value={analytics.sessionCount} label="Sessions" /></View>
+            <View testID="habit-tile" style={tile}><StatNumber value={activeDays} label="Active days this week" /></View>
+            <View testID="habit-tile" style={tile}>
+              <StatNumber value={analytics.avgAccuracy !== null ? `${analytics.avgAccuracy}%` : '–'} label="Average accuracy" />
+            </View>
           </View>
         </Card>
 
         <TwoColumn
           primary={
             <View style={{ gap: spacing.xxl }}>
-              <ProgressSection title="Readiness by subject" summary="Lowest first. Tap one to take its diagnostic.">
-                <SubjectReadinessList {...readiness} />
-              </ProgressSection>
-
               <ProgressSection
-                title="This week"
-                summary={weekAvg !== null ? `Average ${weekAvg}% on ${activeDays} day${activeDays === 1 ? '' : 's'}` : 'No practice yet this week'}
+                title="Study time"
+                summary={weekMinutes > 0 ? `${weekMinutes} minute${weekMinutes === 1 ? '' : 's'} in the last 7 days` : 'No practice yet this week'}
               >
                 <WeeklyChart data={analytics.weeklyData} />
+              </ProgressSection>
+
+              <ProgressSection title="Readiness by subject" summary="Lowest first. Tap one to take its diagnostic.">
+                <SubjectReadinessList {...readiness} />
               </ProgressSection>
 
               <ProgressSection
@@ -216,18 +226,16 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                   analytics.topicMastery.map((m, i) => (
                     <View key={`${m.label}-${i}`} style={{ gap: spacing.xs, paddingVertical: spacing.sm }}>
                       <View style={{ flexDirection: 'row', gap: spacing.md }}>
-                        <Text style={[textStyle('body', t.textPrimary), { flex: 1 }]} numberOfLines={2} maxFontSizeMultiplier={2}>
+                        <Text role="body" numberOfLines={2} style={{ flex: 1 }}>
                           {m.label}
                         </Text>
-                        <Text style={[textStyle('label', t.textPrimary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.5}>
-                          {m.accuracy}%
-                        </Text>
+                        <RowNumber>{`${m.accuracy}%`}</RowNumber>
                       </View>
-                      <ProgressBar value={m.accuracy / 100} label={`${m.label} accuracy`} tone={accuracyTone(m.accuracy)} />
+                      <ProgressBar value={m.accuracy / 100} label={`${m.label} accuracy`} tone="accent" />
                     </View>
                   ))
                 ) : (
-                  <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+                  <Text role="footnote" color={t.textSecondary}>
                     Practice individual topics to see them here.
                   </Text>
                 )}
@@ -243,20 +251,18 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                       value={fmtDuration(analytics.avgTime.overallAvgMs)}
                       label={`Average per question, ${analytics.avgTime.overallCount} timed`}
                     />
-                    <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
+                    <Text role="caption" color={t.textSecondary}>
                       Includes time spent revisiting a question.
                     </Text>
                     {analytics.avgTime.bySubject.map((sub, i) => (
                       <Row key={sub.subject} first={i === 0}>
-                        <Text style={[textStyle('body', t.textPrimary), { flex: 1 }]} numberOfLines={1} maxFontSizeMultiplier={2}>{sub.subject}</Text>
-                        <Text style={[textStyle('label', t.textPrimary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.5}>
-                          {fmtDuration(sub.avgMs)}
-                        </Text>
+                        <Text role="body" numberOfLines={1} style={{ flex: 1 }}>{sub.subject}</Text>
+                        <RowNumber>{fmtDuration(sub.avgMs)}</RowNumber>
                       </Row>
                     ))}
                   </View>
                 ) : (
-                  <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+                  <Text role="footnote" color={t.textSecondary}>
                     Complete a timed quiz to see your pace here.
                   </Text>
                 )}
@@ -270,8 +276,8 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                     const inner = (
                       <>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={2}>{m.label}</Text>
-                          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{detail}</Text>
+                          <Text role="headline" numberOfLines={2}>{m.label}</Text>
+                          <Text role="footnote" color={t.textSecondary}>{detail}</Text>
                         </View>
                         {m.destination ? (
                           <View {...decorative} style={{ transform: [{ scaleX: -1 }] }}>
@@ -283,50 +289,45 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                     if (!m.destination) return <Row key={m.groupKey} first={i === 0}>{inner}</Row>
                     const dest = m.destination
                     return (
-                      <Pressable
+                      <PressableScale
                         key={m.groupKey}
                         onPress={() => router.push(missedTopicHref(dest.topicId, dest.listingSlug) as never)}
                         accessibilityRole="button"
                         accessibilityLabel={`Review ${m.label}, ${detail}`}
-                        style={(state) => {
-                          const { pressed, hovered, focused } = state as WebPressableState
-                          return [
-                            {
-                              flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingVertical: spacing.sm,
-                              borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider,
-                              backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
-                            },
-                            focusRing(t.focusRing, focused),
-                          ]
-                        }}
+                        style={({ pressed, hovered, focused }) => [
+                          {
+                            flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: layout.rowMinHeight + 12, paddingVertical: spacing.sm,
+                            borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider,
+                            backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
+                          },
+                          focusRing(t.focusRing, focused),
+                        ]}
                       >
                         {inner}
-                      </Pressable>
+                      </PressableScale>
                     )
                   })
                 ) : (
-                  <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+                  <Text role="footnote" color={t.textSecondary}>
                     No mistakes tracked yet. Keep practicing.
                   </Text>
                 )}
               </ProgressSection>
 
-              {/* Mock score history: score bands from full mocks — no percentile, no cut-off verdict. */}
+              {/* Mock score history: raw % correct per full mock. No band, no percentile, no verdict. */}
               {latestMock ? (
                 <ProgressSection
                   title="Mock score history"
-                  summary={`Latest: ${latestMock.band} (${latestMock.pct}% raw)`}
+                  summary={`Latest ${latestMock.pct}%`}
                   collapsible
                 >
                   {analytics.mockAttemptHistory.slice(-8).reverse().map((mh: MockAttemptScore, i: number) => (
                     <Row key={`${mh.listingSlug}-${mh.completedAt}`} first={i === 0}>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={1} maxFontSizeMultiplier={2}>{mh.band}</Text>
-                        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{fmtDate(mh.completedAt)}</Text>
+                        <Text role="headline" numberOfLines={1}>Full mock</Text>
+                        <Text role="footnote" color={t.textSecondary}>{fmtDate(mh.completedAt)}</Text>
                       </View>
-                      <Text style={[textStyle('label', t.textPrimary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.5}>
-                        {mh.pct}% raw
-                      </Text>
+                      <RowNumber>{`${mh.pct}%`}</RowNumber>
                     </Row>
                   ))}
                 </ProgressSection>
@@ -341,10 +342,10 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                   {sessions.map((rs, i) => (
                     <Row key={rs.id} first={i === 0}>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={1} maxFontSizeMultiplier={2}>{rs.title}</Text>
-                        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{fmtDate(rs.completedAt)}</Text>
+                        <Text role="headline" numberOfLines={1}>{rs.title}</Text>
+                        <Text role="footnote" color={t.textSecondary}>{fmtDate(rs.completedAt)}</Text>
                       </View>
-                      <Badge label={`${rs.accuracy}%`} tone={accuracyTone(rs.accuracy)} />
+                      <RowNumber>{`${rs.accuracy}%`}</RowNumber>
                     </Row>
                   ))}
                   {!showAllSessions && hiddenCount > 0 ? (

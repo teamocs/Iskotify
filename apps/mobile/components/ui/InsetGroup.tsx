@@ -76,6 +76,8 @@ export interface InsetGroupProps {
   children: ReactNode
   /** Section title above the group, sentence case. Exposed as a heading. */
   header?: string
+  /** The header's heading level (default 3; 2 on a page whose title is the only h1 above it). */
+  headerLevel?: 2 | 3
   /** Explanatory note under the group. */
   footer?: string
   /** Inset by the page gutter (default). Pass false inside an already-padded container. */
@@ -90,7 +92,7 @@ export interface InsetGroupProps {
  * optional footnote header and footer, inset from the screen edge by the
  * page gutter. Children are InsetRows (or ListRows).
  */
-export function InsetGroup({ children, header, footer, inset = true, style, testID }: InsetGroupProps) {
+export function InsetGroup({ children, header, headerLevel = 3, footer, inset = true, style, testID }: InsetGroupProps) {
   const { theme: t } = useTheme()
   const gutter = pagePadding(useBreakpoint())
   const rows = flattenRows(children)
@@ -98,7 +100,7 @@ export function InsetGroup({ children, header, footer, inset = true, style, test
   return (
     <View testID={testID} style={[{ marginHorizontal: inset ? gutter : 0, gap: spacing.sm - 2 }, style]}>
       {header ? (
-        <Text role="footnote" color={t.textSecondary} {...heading(3)} style={{ paddingHorizontal: spacing.lg }}>
+        <Text role="footnote" color={t.textSecondary} {...heading(headerLevel)} style={{ paddingHorizontal: spacing.lg }}>
           {header}
         </Text>
       ) : null}
@@ -155,6 +157,8 @@ export interface InsetRowProps {
   /** On a switch row the subtitle is the hint unless this is given. */
   accessibilityHint?: string
   disabled?: boolean
+  /** A destructive action (Sign out, Delete): the title in the danger ink. */
+  destructive?: boolean
   /** Lines the title and subtitle may wrap to (default 2). */
   numberOfLines?: number
   testID?: string
@@ -170,7 +174,7 @@ export interface InsetRowProps {
 export function InsetRow({
   title, subtitle, icon, iconTone, iconSolid, leading, value, trailing, switchValue, onSwitchChange,
   onPress, chevron, accessibilityRole = 'button', accessibilityLabel, accessibilityHint, disabled,
-  numberOfLines = 2, testID,
+  destructive, numberOfLines = 2, testID,
 }: InsetRowProps) {
   const { theme: t } = useTheme()
   const { grouped, last } = useContext(RowPositionContext)
@@ -181,7 +185,7 @@ export function InsetRow({
 
   const texts = (
     <View style={{ flex: 1, minWidth: 0, gap: 2, paddingVertical: spacing.sm }}>
-      <Text role="body" numberOfLines={numberOfLines}>{title}</Text>
+      <Text role="body" color={destructive ? t.dangerStrong : undefined} numberOfLines={numberOfLines}>{title}</Text>
       {subtitle ? (
         <Text role="subheadline" color={t.textSecondary} numberOfLines={numberOfLines}>{subtitle}</Text>
       ) : null}
@@ -282,7 +286,7 @@ export function InsetRow({
 
   if (!pressable) {
     return (
-      <View style={rowStyle} testID={testID} accessibilityLabel={accessibilityLabel}>
+      <View style={[rowStyle, disabled ? { opacity: 0.5 } : null]} testID={testID} accessibilityLabel={accessibilityLabel}>
         {content}
       </View>
     )

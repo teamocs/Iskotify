@@ -2,6 +2,8 @@ import React from 'react'
 import { render, fireEvent, screen, waitFor } from '@testing-library/react-native'
 import ReportBugScreen from '../report-bug'
 import { aria } from '../../../test-utils/aria'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
+import { TextField } from '../../../components/ui/TextField'
 
 const mockBack = jest.fn()
 jest.mock('expo-router', () => ({
@@ -67,6 +69,21 @@ describe('ReportBugScreen', () => {
   it('the description is a labelled field (the placeholder is only an example)', () => {
     render(<ReportBugScreen />)
     expect(screen.getByLabelText('What happened?')).toBeTruthy()
+  })
+
+  it('every field is a labelled TextField', () => {
+    render(<ReportBugScreen />)
+    const labels = screen.UNSAFE_getAllByType(TextField).map(f => f.props.label)
+    expect(labels).toEqual(['What happened?'])
+  })
+
+  it('has exactly one primary action (Send report), on the form and after sending', async () => {
+    render(<ReportBugScreen />)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+    fireEvent.changeText(screen.getByLabelText('What happened?'), 'It crashed')
+    fireEvent.press(screen.getByRole('button', { name: 'Send report' }))
+    await screen.findByText(/Report sent/)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 
   it('offers the screenshot as a real button with a drawn icon, no "+" glyph', () => {

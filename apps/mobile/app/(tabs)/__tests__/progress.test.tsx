@@ -38,6 +38,11 @@ describe('Progress tab', () => {
     expect(scroll.findAll((n: any) => n.props.accessibilityRole === 'header' && n.props.children === 'Progress')).not.toHaveLength(0)
   })
 
+  it('carries the "This week" eyebrow above the large title', () => {
+    render(<ProgressScreen />)
+    expect(screen.getByTestId('large-title-eyebrow').props.children).toBe('This week')
+  })
+
   it('has the Profile avatar in its header', () => {
     const { router } = require('expo-router')
     render(<ProgressScreen />)
