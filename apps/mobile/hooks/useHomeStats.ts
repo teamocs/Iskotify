@@ -30,6 +30,8 @@ export interface FocusedListing {
   type: string
   examDate: number | null
   deadline: number | null
+  /** The listing's official page (listings.external_url); null when it has none. */
+  sourceUrl?: string | null
 }
 
 export interface NoteReminder {
@@ -205,6 +207,7 @@ export function useHomeStats(): HomeStats {
             type: listingsTable.type,
             examDate: listingsTable.examDate,
             deadline: listingsTable.deadline,
+            sourceUrl: listingsTable.externalUrl,
           }).from(focusListings)
             .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
             .orderBy(asc(focusListings.priority)),
@@ -269,6 +272,7 @@ export function useHomeStats(): HomeStats {
             type: r.type ?? (isSchoolFocusSlug(r.slug) ? 'school' : 'exam'),
             examDate: r.examDate ?? null,
             deadline: r.deadline ?? null,
+            sourceUrl: r.sourceUrl || null,
           })),
           noteReminders: reminderRows
             .filter(r => r.reminderAt != null)

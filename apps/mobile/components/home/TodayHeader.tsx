@@ -1,13 +1,15 @@
-import { View, Text, Pressable } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { router } from 'expo-router'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bell1Outlined, Bell1Solid } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { layout, spacing } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Avatar } from '../ui/Avatar'
+import { Glass } from '../ui/Glass'
+import { Text } from '../ui/Text'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 import { LargeTitleHeader } from '../navigation/LargeTitleHeader'
+import { GlassIconButton } from '../navigation/GlassIconButton'
 
 function phHour(): number {
   const now = new Date()
@@ -22,13 +24,17 @@ function timeGreeting(): string {
   return 'Good evening'
 }
 
-// Hoisted: building an Intl formatter is slow — do it once per JS load.
-// Phones get the short form ("Sat, Sep 26") so it never splits beside the
-// controls; wider screens spell it out.
-const DATE_LONG = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-const DATE_SHORT = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+// Hoisted: building an Intl formatter is slow, so do it once per JS load.
+const WEEKDAY = new Intl.DateTimeFormat('en-US', { weekday: 'long' })
+const MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' })
+
+/** The eyebrow date, day before month: "Sunday, 12 October". */
+export function eyebrowDate(d: Date): string {
+  return `${WEEKDAY.format(d)}, ${d.getDate()} ${MONTH.format(d)}`
+}
 
 const LONG_NAME_CHARS = 12
+const { visual: VISUAL, hit: HIT } = layout.headerButton
 
 interface Props {
   fullName: string
@@ -40,71 +46,69 @@ interface Props {
 }
 
 /**
- * Today's header, in two tiers so nothing competes for width:
+ * Today's large-title header (iOS redesign P4):
  *
- *   top row   — the date (quiet, left) and the real controls (right):
- *               refresh on web, reminders, and the avatar that opens Profile
- *   heading   — the greeting at full width. On a phone the first name gets
- *               its own line under "Good morning," so a long name wraps at a
- *               word boundary instead of being squeezed into a third of the
- *               row; wider screens keep it on one line.
+ *   top row  - the date eyebrow (footnote, uppercase, textSecondary) and the
+ *              controls: refresh on web, reminders, and the glass avatar
+ *              that opens the Profile sheet
+ *   title    - the greeting in the large-title role, at full width, so a
+ *              long name wraps at a word boundary instead of being squeezed
+ *              beside the controls
  *
- * The heading is one accessible header ("Good morning, Ana"), never truncated.
+ * The greeting is one accessible header ("Good morning, Ana"), never
+ * truncated. Once it scrolls away the glass band reads "Today".
  */
 export function TodayHeader({ fullName, streakDays, remindersOn, onOpenReminders, refreshControl }: Props) {
   const { theme: t } = useTheme()
   const compact = useBreakpoint() === 'compact'
   const firstName = fullName.trim().split(/\s+/)[0] || 'Student'
   const greeting = timeGreeting()
-  const date = (compact ? DATE_SHORT : DATE_LONG).format(new Date())
-  // A single word can't wrap. Past ~12 letters the 28pt title role would
+  // A single word can't wrap. Past ~12 letters the 34pt large title would
   // overflow a 320pt phone at large font scale and split mid-word, so a very
-  // long first name steps down to the headline role instead.
-  const nameRole = compact && firstName.length > LONG_NAME_CHARS ? 'headline' : 'title'
+  // long first name steps down to title1.
+  const longName = compact && firstName.length > LONG_NAME_CHARS
 
-  // A large-title header with a custom heading: once the greeting scrolls
-  // away, the inline band reads "Today".
   return (
     <LargeTitleHeader title="Today" testID="today-header">
-    <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.xl, gap: spacing.md }}>
-      <View testID="today-header-top" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-        <Text
-          style={[textStyle('label', t.textSecondary), { flex: 1, minWidth: 0 }]}
-          maxFontSizeMultiplier={1.6}
-        >
-          {date}
-        </Text>
-        {refreshControl}
-        <Pressable
-          onPress={onOpenReminders}
-          accessibilityRole="button"
-          accessibilityLabel="Study reminders"
-          accessibilityHint={remindersOn ? 'Reminders are on' : 'Reminders are off'}
-          style={(state) => {
-            const { pressed, hovered, focused } = state as WebPressableState
-            return [
-              {
-                width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
-              },
-              focusRing(t.focusRing, focused),
-            ]
-          }}
-        >
-          <View {...decorative}>
-            <Lineicons icon={remindersOn ? Bell1Solid : Bell1Outlined} size={22} color={remindersOn ? t.accentText : t.textSecondary} />
-          </View>
-        </Pressable>
-        <Avatar
-          name={fullName}
-          size={36}
-          onPress={() => router.push('/profile')}
-          accessibilityLabel="Profile"
-          accessibilityHint="Opens your profile and settings"
-        />
-      </View>
+      <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.xl, gap: spacing.xs }}>
+        <View testID="today-header-top" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <Text
+            role="footnote"
+            color={t.textSecondary}
+            chrome
+            style={{ flex: 1, minWidth: 0, fontWeight: '600', textTransform: 'uppercase' }}
+          >
+            {eyebrowDate(new Date())}
+          </Text>
+          {refreshControl}
+          <GlassIconButton
+            icon={remindersOn ? Bell1Solid : Bell1Outlined}
+            onPress={onOpenReminders}
+            accessibilityLabel="Study reminders"
+            accessibilityHint="Opens the study reminder settings"
+            accessibilityValue={{ text: remindersOn ? 'On' : 'Off' }}
+          />
+          <Pressable
+            onPress={() => router.push('/profile')}
+            accessibilityRole="button"
+            accessibilityLabel="Profile"
+            accessibilityHint="Opens your profile and settings"
+            style={(state) => {
+              const { pressed, focused } = state as WebPressableState
+              return [
+                { minWidth: HIT, minHeight: HIT, borderRadius: HIT / 2, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 },
+                focusRing(t.focusRing, focused),
+              ]
+            }}
+          >
+            <Glass testID="profile-glass" variant="button" style={{ width: VISUAL, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <View {...decorative}>
+                <Avatar name={fullName} size={32} />
+              </View>
+            </Glass>
+          </Pressable>
+        </View>
 
-      <View style={{ gap: spacing.xs }}>
         <View
           testID="today-header-greeting"
           accessible
@@ -112,29 +116,17 @@ export function TodayHeader({ fullName, streakDays, remindersOn, onOpenReminders
           aria-level={1}
           accessibilityLabel={`${greeting}, ${firstName}`}
         >
-          {compact ? (
-            <>
-              <Text style={[textStyle('headline', t.textSecondary), weight('400')]} maxFontSizeMultiplier={1.4}>
-                {`${greeting},`}
-              </Text>
-              <Text style={[textStyle(nameRole, t.textPrimary), weight('700')]} maxFontSizeMultiplier={1.4}>
-                {firstName}
-              </Text>
-            </>
-          ) : (
-            <Text style={[textStyle('title', t.textPrimary), weight('400')]} maxFontSizeMultiplier={1.4}>
-              {`${greeting}, `}
-              <Text style={weight('700')}>{firstName}</Text>
+          <Text role="largeTitle" maxFontSizeMultiplier={1.4}>
+            {`${greeting}, `}
+            <Text role={longName ? 'title1' : 'largeTitle'} maxFontSizeMultiplier={1.4}>
+              {firstName}
             </Text>
-          )}
+          </Text>
         </View>
         {streakDays > 0 ? (
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
-            {`${streakDays}-day streak`}
-          </Text>
+          <Text role="subheadline" color={t.textSecondary}>{`${streakDays}-day streak`}</Text>
         ) : null}
       </View>
-    </View>
     </LargeTitleHeader>
   )
 }

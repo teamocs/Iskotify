@@ -56,7 +56,7 @@ export async function scheduleNoteReminder(
   await N.scheduleNotificationAsync({
     identifier: `note-reminder-${noteId}`,
     content: {
-      title: '🔔 Note Reminder',
+      title: 'Note reminder',
       body: noteTitle.trim() || 'You have a note reminder.',
       sound: true,
       data: { noteId },
@@ -115,6 +115,26 @@ export interface ScheduleOptions {
 // screen, settings) goes through scheduleIskotifyNotifications, so they all
 // produce exactly this content.
 export const DAILY_REMINDER_BODY = 'A few minutes of practice today keeps you on track for exam day.'
+type CountdownKind = 'exam' | 'deadline'
+
+/**
+ * Countdown bodies in the brand voice (docs/brand/90_SYNTHESIS.md §5–6):
+ * calm and factual, encourage then point at one action. No emoji, no
+ * exclamation marks, no "days left" scarcity. The title states the fact.
+ */
+export const COUNTDOWN_BODY: Record<CountdownKind, Record<7 | 3 | 1, string>> = {
+  exam: {
+    7: "You've got this. One drill today keeps you ready.",
+    3: 'Keep it steady. A short review today is enough.',
+    1: "Rest well tonight. You've prepared for this.",
+  },
+  deadline: {
+    7: 'Check your requirements today so the last day stays calm.',
+    3: 'Make sure your requirements are ready to submit.',
+    1: "Submit by tomorrow if you haven't yet.",
+  },
+}
+
 export const WEEKLY_SUMMARY_BODY = 'Take a few minutes to review the topics you find hardest and check your progress.'
 
 export async function scheduleIskotifyNotifications(
@@ -134,7 +154,7 @@ export async function scheduleIskotifyNotifications(
   await N.scheduleNotificationAsync({
     identifier: 'daily-practice',
     content: {
-      title: 'Iskotify — Time to Study! 📚',
+      title: 'Iskotify — Time to study',
       body: DAILY_REMINDER_BODY,
       sound: true,
     },
@@ -152,7 +172,7 @@ export async function scheduleIskotifyNotifications(
     await N.scheduleNotificationAsync({
       identifier: 'weekly-weak-areas',
       content: {
-        title: 'Iskotify — Review Weak Areas 🎯',
+        title: 'Iskotify — Review your weak areas',
         body: WEEKLY_SUMMARY_BODY,
         sound: true,
       },
@@ -168,11 +188,11 @@ export async function scheduleIskotifyNotifications(
   // 3. Exam/deadline countdowns
   const now = Date.now()
   for (const listing of listings) {
-    const targets: Array<{ ms: number; label: string }> = []
-    if (listing.examDate != null) targets.push({ ms: listing.examDate, label: listing.title })
-    if (listing.deadline != null) targets.push({ ms: listing.deadline, label: `${listing.title} deadline` })
+    const targets: { ms: number; label: string; kind: CountdownKind }[] = []
+    if (listing.examDate != null) targets.push({ ms: listing.examDate, label: listing.title, kind: 'exam' })
+    if (listing.deadline != null) targets.push({ ms: listing.deadline, label: `${listing.title} deadline`, kind: 'deadline' })
 
-    for (const { ms, label } of targets) {
+    for (const { ms, label, kind } of targets) {
       const at7d = ms - 7 * 86_400_000
       const at3d = ms - 3 * 86_400_000
       const at1d = ms - 1 * 86_400_000
@@ -181,8 +201,8 @@ export async function scheduleIskotifyNotifications(
         await N.scheduleNotificationAsync({
           identifier: `exam-7d-${listing.slug}`,
           content: {
-            title: 'Iskotify — 7 Days Left! 🎯',
-            body: `${label} is in 7 days! Start your final review!`,
+            title: `${label} is in 7 days`,
+            body: COUNTDOWN_BODY[kind][7],
             sound: true,
           },
           trigger: {
@@ -195,8 +215,8 @@ export async function scheduleIskotifyNotifications(
         await N.scheduleNotificationAsync({
           identifier: `exam-3d-${listing.slug}`,
           content: {
-            title: 'Iskotify — 3 Days Left! 💪',
-            body: `${label} is in 3 days! Final push — you can do this!`,
+            title: `${label} is in 3 days`,
+            body: COUNTDOWN_BODY[kind][3],
             sound: true,
           },
           trigger: {
@@ -209,8 +229,8 @@ export async function scheduleIskotifyNotifications(
         await N.scheduleNotificationAsync({
           identifier: `exam-1d-${listing.slug}`,
           content: {
-            title: 'Iskotify — TOMORROW! 🙌',
-            body: `${label} is TOMORROW! You've got this!`,
+            title: `${label} is tomorrow`,
+            body: COUNTDOWN_BODY[kind][1],
             sound: true,
           },
           trigger: {

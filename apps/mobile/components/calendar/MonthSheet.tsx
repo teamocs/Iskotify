@@ -1,9 +1,13 @@
 import { useState, useMemo } from 'react'
-import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from 'react-native'
+import { View, Pressable, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ChevronLeftOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
+import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
+import { radius, spacing } from '../../theme/tokens'
 import { localDayIndexOfDate } from '../../utils/localDay'
+import { Sheet } from '../ui/Sheet'
+import { Text } from '../ui/Text'
+import { decorative } from '../ui/a11y'
 
 const DAY_LETTERS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const MAX_BACK_MONTHS = 24
@@ -45,7 +49,7 @@ interface Props {
 }
 
 export function MonthSheet({ visible, onClose, onDayPress, importantDays, reminderDays, practiceDays }: Props) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const today = useMemo(() => {
     const d = new Date()
     return { y: d.getFullYear(), m: d.getMonth(), dayIndex: localDayIndexOfDate(d) }
@@ -73,111 +77,88 @@ export function MonthSheet({ visible, onClose, onDayPress, importantDays, remind
   }
 
   const styles = useMemo(() => StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: t.bg, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '90%' },
-    handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: t.border, marginVertical: 8 },
-    header: { paddingHorizontal: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    headerTitle: { color: t.textPrimary, fontSize: typo.lg, fontWeight: '700' },
-    arrowBtn: { paddingHorizontal: 10, paddingVertical: 6 },
-    todayPill: { backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
-    todayTxt: { color: t.textSecondary, fontSize: typo.xs, fontWeight: '600' },
-    weekdayRow: { flexDirection: 'row', paddingHorizontal: 8, marginBottom: 4 },
-    weekdayCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
-    weekdayTxt: { color: t.textTertiary, fontSize: typo.xs, fontWeight: '600' },
-    gridRow: { flexDirection: 'row', paddingHorizontal: 8 },
+    nav: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },
+    arrowBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+    todayPill: {
+      marginLeft: 'auto', minHeight: 32, justifyContent: 'center',
+      backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: radius.capsule, paddingHorizontal: spacing.md,
+    },
+    weekdayRow: { flexDirection: 'row', marginBottom: spacing.xs },
+    weekdayCell: { flex: 1, alignItems: 'center', paddingVertical: spacing.xs },
+    gridRow: { flexDirection: 'row' },
     cell: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-    cellNum: { color: t.textPrimary, fontSize: typo.sm, fontWeight: '600' },
-    cellNumMuted: { color: t.textTertiary },
-    todayCircle: { backgroundColor: t.textPrimary, width: 28, minHeight: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    todayNum: { color: t.bg },
+    todayCircle: { backgroundColor: t.textPrimary, minWidth: 28, minHeight: 28, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center' },
     dotsRow: { flexDirection: 'row', gap: 2, position: 'absolute', bottom: 4 },
-    dot: { width: 4, height: 4, borderRadius: 2 },
+    dot: { width: 4, aspectRatio: 1, borderRadius: 2 },
     dotExam: { backgroundColor: t.accentText },
     dotReminder: { backgroundColor: t.warning },
     dotPractice: { backgroundColor: '#60a5fa' },
-    closeBtn: { padding: 6 },
-  }), [t, typo])
+  }), [t])
 
   const rows: MonthCell[][] = []
   for (let r = 0; r < 6; r++) rows.push(grid.slice(r * 7, r * 7 + 7))
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Pressable style={styles.arrowBtn} onPress={() => jumpMonths(-1)} accessibilityLabel="Previous month">
-                <Lineicons icon={ChevronLeftOutlined} size={20} color={t.textSecondary} />
-              </Pressable>
-              <Text style={styles.headerTitle}>{monthLabel}</Text>
-              <Pressable style={styles.arrowBtn} onPress={() => jumpMonths(1)} accessibilityLabel="Next month">
-                <View style={{ transform: [{ scaleX: -1 }] }}>
-                  <Lineicons icon={ChevronLeftOutlined} size={20} color={t.textSecondary} />
+    <Sheet visible={visible} title={monthLabel} onClose={onClose} closeLabel="Close month sheet">
+      <View style={styles.nav}>
+        <Pressable style={styles.arrowBtn} onPress={() => jumpMonths(-1)} accessibilityRole="button" accessibilityLabel="Previous month">
+          <View {...decorative}>
+            <Lineicons icon={ChevronLeftOutlined} size={20} color={t.textSecondary} />
+          </View>
+        </Pressable>
+        <Pressable style={styles.arrowBtn} onPress={() => jumpMonths(1)} accessibilityRole="button" accessibilityLabel="Next month">
+          <View {...decorative} style={{ transform: [{ scaleX: -1 }] }}>
+            <Lineicons icon={ChevronLeftOutlined} size={20} color={t.textSecondary} />
+          </View>
+        </Pressable>
+        <Pressable style={styles.todayPill} onPress={jumpToToday} accessibilityRole="button">
+          <Text role="footnote" color={t.textSecondary} style={{ fontWeight: '600' }}>Today</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.weekdayRow}>
+        {DAY_LETTERS.map(l => (
+          <View key={l} style={styles.weekdayCell}>
+            <Text role="caption" color={t.textTertiary} style={{ fontWeight: '600' }}>{l}</Text>
+          </View>
+        ))}
+      </View>
+
+      {rows.map((row, r) => (
+        <View key={r} style={styles.gridRow}>
+          {row.map(cell => {
+            const isToday = cell.dayIndex === today.dayIndex
+            const hasExam = importantDays.has(cell.dayIndex)
+            const hasReminder = reminderDays.has(cell.dayIndex)
+            const hasPractice = practiceDays.has(cell.dayIndex)
+            const num = String(cell.date.getDate())
+            return (
+              <Pressable
+                key={cell.date.getTime()}
+                style={styles.cell}
+                onPress={() => onDayPress(cell.date.getTime())}
+                accessibilityLabel={`Day ${cell.date.getDate()}`}
+                accessibilityRole="button"
+              >
+                {isToday ? (
+                  <View style={styles.todayCircle}>
+                    <Text role="subheadline" color={t.bg} maxFontSizeMultiplier={1.4} style={{ fontWeight: '600' }}>{num}</Text>
+                  </View>
+                ) : (
+                  <Text role="subheadline" color={cell.inMonth ? t.textPrimary : t.textTertiary} maxFontSizeMultiplier={1.4} style={{ fontWeight: '600' }}>
+                    {num}
+                  </Text>
+                )}
+                <View style={styles.dotsRow} {...decorative}>
+                  {hasExam && <View style={[styles.dot, styles.dotExam]} />}
+                  {hasReminder && <View style={[styles.dot, styles.dotReminder]} />}
+                  {hasPractice && <View style={[styles.dot, styles.dotPractice]} />}
                 </View>
               </Pressable>
-              <Pressable style={styles.todayPill} onPress={jumpToToday}>
-                <Text style={styles.todayTxt}>Today</Text>
-              </Pressable>
-            </View>
-            <Pressable style={styles.closeBtn} onPress={onClose} accessibilityLabel="Close month sheet">
-              <Lineicons icon={XmarkOutlined} size={18} color={t.textTertiary} />
-            </Pressable>
-          </View>
-
-          <View style={styles.weekdayRow}>
-            {DAY_LETTERS.map(l => (
-              <View key={l} style={styles.weekdayCell}>
-                <Text style={styles.weekdayTxt}>{l}</Text>
-              </View>
-            ))}
-          </View>
-
-          <ScrollView>
-            {rows.map((row, r) => (
-              <View key={r} style={styles.gridRow}>
-                {row.map(cell => {
-                  const isToday = cell.dayIndex === today.dayIndex
-                  const hasExam = importantDays.has(cell.dayIndex)
-                  const hasReminder = reminderDays.has(cell.dayIndex)
-                  const hasPractice = practiceDays.has(cell.dayIndex)
-                  return (
-                    <Pressable
-                      key={cell.date.getTime()}
-                      style={styles.cell}
-                      onPress={() => onDayPress(cell.date.getTime())}
-                      accessibilityLabel={`Day ${cell.date.getDate()}`}
-                      accessibilityRole="button"
-                    >
-                      {isToday ? (
-                        <View style={styles.todayCircle}>
-                          <Text style={[styles.cellNum, styles.todayNum]}>{cell.date.getDate()}</Text>
-                        </View>
-                      ) : (
-                        <Text style={[styles.cellNum, !cell.inMonth && styles.cellNumMuted]}>
-                          {cell.date.getDate()}
-                        </Text>
-                      )}
-                      <View style={styles.dotsRow}>
-                        {hasExam && <View style={[styles.dot, styles.dotExam]} />}
-                        {hasReminder && <View style={[styles.dot, styles.dotReminder]} />}
-                        {hasPractice && <View style={[styles.dot, styles.dotPractice]} />}
-                      </View>
-                    </Pressable>
-                  )
-                })}
-              </View>
-            ))}
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+            )
+          })}
+        </View>
+      ))}
+    </Sheet>
   )
 }

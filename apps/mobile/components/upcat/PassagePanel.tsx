@@ -49,7 +49,7 @@ export function PassagePanel({ passage }: { passage: string }) {
           accessibilityLabel={expanded ? 'Collapse passage' : 'Expand passage'}
           aria-expanded={expanded}
         >
-          <Text style={s.title} maxFontSizeMultiplier={1.4}>📄 Passage</Text>
+          <Text style={s.title} maxFontSizeMultiplier={1.4}>Passage</Text>
           <Text style={s.chev}>{expanded ? '▾' : '▸'}</Text>
         </Pressable>
         <Pressable

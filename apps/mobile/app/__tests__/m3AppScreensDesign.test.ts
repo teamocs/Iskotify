@@ -116,7 +116,8 @@ describe('M3 screens use tokens, textStyle roles, aria state, real icons and res
         expect(read(rel).match(FONT_NAME) ?? []).toEqual([])
       })
       it('has no uppercase labels', () => {
-        expect(read(rel).match(UPPERCASE) ?? []).toEqual([])
+        // One sanctioned exception: Today's date eyebrow (owner spec 2026-10-13; see m2DesignTokens).
+        expect((read(rel).match(UPPERCASE) ?? []).length).toBe(rel === 'components/home/TodayHeader.tsx' ? 1 : 0)
       })
       it('uses no emoji or glyphs as icons', () => {
         expect(read(rel).match(EMOJI) ?? []).toEqual([])

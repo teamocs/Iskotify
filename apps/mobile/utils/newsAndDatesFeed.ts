@@ -12,6 +12,7 @@
 
 import { upcomingEvents, sortBySeverityThenDate } from './admissionsFeed'
 import type { FeedItem } from './admissionsFeed'
+import { firstSourceHost } from './newsSources'
 import { calendarDayIndex, daysUntilDate, localDateISO, localDayIndex, localDayOffsetMs } from './localDay'
 
 export type FeedEntryKind = 'listing' | 'reminder' | 'admission' | 'news'
@@ -28,6 +29,8 @@ export interface MergedFeedEntry {
   /** Navigation hint: listing slug / note id / admission schoolSlug, as applicable. */
   slug?: string | null
   eventType?: string | null
+  /** Host of the official source ("sei.dost.gov.ph") when the data has one; never invented. */
+  sourceHost?: string | null
 }
 
 export interface FocusedListingLike {
@@ -36,6 +39,8 @@ export interface FocusedListingLike {
   type: string
   examDate: number | null
   deadline: number | null
+  /** The listing's official page (listings.external_url), if any. */
+  sourceUrl?: string | null
 }
 
 export interface NoteReminderLike {
@@ -77,6 +82,7 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
         label: l.type === 'exam' ? 'Exam' : 'Deadline',
         date,
         slug: l.slug,
+        sourceHost: firstSourceHost(l.sourceUrl ?? null) ?? undefined,
       }
     })
     .filter(isStillAhead)
@@ -111,6 +117,7 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
         date: ms,
         slug: item.schoolSlug ?? null,
         eventType: item.eventType ?? null,
+        sourceHost: firstSourceHost(item.sources) ?? undefined,
       }
     })
     // Don't double-count an admissions event that lands on the same date as an
@@ -134,6 +141,7 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
       date: null,
       severity: item.severity,
       slug: item.schoolSlug ?? null,
+      sourceHost: firstSourceHost(item.sources) ?? undefined,
     }))
 
   return [...dated, ...newsEntries].slice(0, limit)

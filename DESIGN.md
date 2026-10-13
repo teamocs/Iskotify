@@ -453,7 +453,8 @@ Status scores (progress, accuracy, rankings) use **neutral colours** (`surface` 
 ### Guard tests
 
 One guard per redesigned area:
-- `apps/mobile/app/(tabs)/__tests__/m2DesignTokens.test.ts` — Today, Progress, Profile
+- `apps/mobile/app/(tabs)/__tests__/m2DesignTokens.test.ts` — Today, Progress, Profile; since the iOS P4 Today PR also no legacy role names (`textStyle`, `typo`, `titleSm`, `bodySm`…) and no fixed `height:` anywhere in `components/home`, and no `typo.*` / `fontSize` in `components/calendar`. The one allowed uppercase is Today's date eyebrow (owner spec, 2026-10-13).
+- `apps/mobile/__tests__/noScareCopy.test.ts` — app-wide voice (brandbook §5–6): no "behind" as status text, no "only N … left" or "N days left" (outside an allowlisted neutral label), no emoji in `app/`, `components/`, `utils/`, `services/` (notifications) and `hooks/`
 - `apps/mobile/components/explore/__tests__/designLint.test.ts` — Explore, listings, schools, career
 - `apps/mobile/components/practice/__tests__/practiceAreaTokens.test.ts` — Practice, exam runner, results, notes, estimator
 - `apps/mobile/app/__tests__/m3AppScreensDesign.test.ts` — M3: practice choosers and runners, notes, subjects, estimator, requirements, scholarship profile, results tracker and their shared components; also requires every listed screen to lay out through `Screen` / `TwoColumn` / `useBreakpoint`, and every tab's web refresh control to be icon-only on phones

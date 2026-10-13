@@ -5,9 +5,10 @@ import { GraduationCap1Outlined, Trophy1Outlined } from '@lineiconshq/free-icons
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
-import { SectionHeader } from '../ui/SectionHeader'
-import { ListCard } from '../ui/ListCard'
+import { InsetGroup, InsetRow } from '../ui/InsetGroup'
 import { InfoBanner } from '../ui/InfoBanner'
+import { Text } from '../ui/Text'
+import { TodaySectionHeader } from './TodaySectionHeader'
 import { MatchPill } from '../scholarships/MatchPill'
 import { selectRecommendedScholarships, type FocusedListingRef } from '../../utils/scholarshipRecommendations'
 import type { StudentProfile } from '../../utils/scholarshipMatch'
@@ -42,22 +43,24 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
 
   return (
     <View style={{ marginTop: spacing.xl }}>
-      <SectionHeader
+      <TodaySectionHeader
         title="Recommended Scholarships"
-        subtitle="Ranked to your profile and target courses"
         actionLabel="See all"
         onAction={() => router.push('/(tabs)/explore?section=scholarships')}
       />
+      <Text role="footnote" color={t.textSecondary} style={{ paddingHorizontal: spacing.xs, marginBottom: spacing.sm }}>
+        Ranked to your profile and target courses
+      </Text>
       {recommended.length > 0 ? (
-        <View style={{ gap: spacing.sm }}>
+        <InsetGroup inset={false}>
           {recommended.map(({ listing, status }) => {
             const amount = amountLabel(listing)
             const subtitle = [listing.provider, amount].filter(Boolean).join(' · ') || undefined
             return (
-              <ListCard
+              <InsetRow
                 key={listing.id}
-                iconBg={t.successSurface}
-                icon={<Lineicons icon={Trophy1Outlined} size={18} color={t.successStrong} />}
+                icon={Trophy1Outlined}
+                iconTone="success"
                 title={listing.title}
                 subtitle={subtitle}
                 trailing={<MatchPill status={status} />}
@@ -65,7 +68,7 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
               />
             )
           })}
-        </View>
+        </InsetGroup>
       ) : (
         <InfoBanner
           icon={<Lineicons icon={GraduationCap1Outlined} size={20} color={t.textSecondary} />}

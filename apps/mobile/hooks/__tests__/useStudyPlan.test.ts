@@ -127,6 +127,27 @@ describe('useStudyPlan', () => {
     expect(rows[0]!.completedAt).not.toBeNull()
   })
 
+  it('markComplete reports whether it saved: true on success, false (and reverted) on a write failure', async () => {
+    const db = makeDb()
+    mockDb = db
+    const { result } = renderHook(() => useStudyPlan())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const id = result.current.items[0]!.id
+
+    const svc = require('../../services/studyPlan')
+    const spy = jest.spyOn(svc, 'markPlanItemDone').mockRejectedValueOnce(new Error('disk full'))
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {})
+    let saved: boolean | undefined
+    await act(async () => { saved = await result.current.markComplete(id) })
+    expect(saved).toBe(false)
+    expect(result.current.items[0]!.completedAt).toBeNull()
+
+    await act(async () => { saved = await result.current.markComplete(id) })
+    expect(saved).toBe(true)
+    spy.mockRestore()
+    err.mockRestore()
+  })
+
   it('nearest focused exam feeds mockSectionRefId + earliestExamDate into the generator', async () => {
     const db = makeDb()
     mockDb = db
