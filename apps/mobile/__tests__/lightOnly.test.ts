@@ -30,6 +30,22 @@ describe('light-only theme', () => {
     expect(app.splash.backgroundColor.toLowerCase()).toBe('#fdf4f4')
   })
 
+  // Without expo-system-ui, Android ignores `userInterfaceStyle` and prebuild
+  // keeps Theme.AppCompat.DayNight, so Alerts, pickers and the window
+  // background follow the phone's dark mode.
+  it('installs expo-system-ui so Android applies userInterfaceStyle natively', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+    expect(pkg.dependencies['expo-system-ui']).toBeDefined()
+  })
+
+  it('pins light at the top level and on every platform that sets its own style', () => {
+    expect(app.userInterfaceStyle).toBe('light')
+    for (const platform of ['ios', 'android'] as const) {
+      const style = app[platform]?.userInterfaceStyle
+      if (style !== undefined) expect({ platform, style }).toEqual({ platform, style: 'light' })
+    }
+  })
+
   it('tells the browser the page is light (color-scheme and theme-color)', () => {
     const html = fs.readFileSync(path.join(root, 'app', '+html.tsx'), 'utf8')
     expect(html).toMatch(/color-scheme:\s*light/)

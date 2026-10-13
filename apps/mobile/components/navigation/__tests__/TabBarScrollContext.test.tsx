@@ -37,8 +37,40 @@ describe('without a TabBarScrollProvider (iOS native tabs)', () => {
 
   it('SceneBlurTarget on Android renders without a provider to register with', () => {
     Platform.OS = 'android'
+    setVersion(31)
     render(<SceneBlurTarget routeKey="k"><Text>scene</Text></SceneBlurTarget>)
     expect(screen.getByText('scene')).toBeTruthy()
+  })
+})
+
+// Android blurs only on API 31+, so the BlurTargetView is mounted only there;
+// older Android gets the scene as it is (the bar falls back to opaque).
+const versionDescriptor = Object.getOwnPropertyDescriptor(Platform, 'Version')
+function setVersion(v: number) {
+  Object.defineProperty(Platform, 'Version', { value: v, configurable: true, writable: true })
+}
+afterEach(() => {
+  if (versionDescriptor) Object.defineProperty(Platform, 'Version', versionDescriptor)
+})
+
+describe('SceneBlurTarget on Android by API level', () => {
+  const blurTargets = (root: { findAll: (p: (n: { type?: { displayName?: string } }) => boolean) => unknown[] }) =>
+    root.findAll(n => n.type?.displayName === 'BlurTargetView')
+
+  it.each([31, 34])('mounts a BlurTargetView on API %i', v => {
+    Platform.OS = 'android'
+    setVersion(v)
+    const { UNSAFE_root } = render(<SceneBlurTarget routeKey="k"><Text>scene</Text></SceneBlurTarget>)
+    expect(screen.getByText('scene')).toBeTruthy()
+    expect(blurTargets(UNSAFE_root)).toHaveLength(1)
+  })
+
+  it.each([26, 30])('passes the scene through on API %i (no blur there)', v => {
+    Platform.OS = 'android'
+    setVersion(v)
+    const { UNSAFE_root } = render(<SceneBlurTarget routeKey="k"><Text>scene</Text></SceneBlurTarget>)
+    expect(screen.getByText('scene')).toBeTruthy()
+    expect(blurTargets(UNSAFE_root)).toHaveLength(0)
   })
 })
 
