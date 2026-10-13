@@ -1,0 +1,58 @@
+# Manual only: ships the current code to the preview channel the safe way.
+# 1. Fingerprint the native layer.
+# 2. Look for a finished preview build with that exact fingerprint.
+# 3. Found: publish an OTA update to it (JS-only change).
+#    Not found: native code changed, so build a new preview APK instead,
+#    because an OTA must never reach a binary it is incompatible with.
+# The owner approves every OTA and APK, so this never runs on push.
+# Run with: npx eas workflow:run .eas/workflows/preview-release.yml
+name: Preview release (OTA or APK)
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        type: string
+        required: true
+        description: What changed, shown on the update in expo.dev
+
+concurrency:
+  cancel_in_progress: false
+  group: preview-release
+
+jobs:
+  fingerprint:
+    name: Fingerprint native code
+    type: fingerprint
+    environment: preview
+
+  find_build:
+    name: Find a matching preview build
+    needs: [fingerprint]
+    type: get-build
+    params:
+      platform: android
+      profile: preview
+      fingerprint_hash: ${{ needs.fingerprint.outputs.android_fingerprint_hash }}
+      wait_for_in_progress: true
+
+  publish_update:
+    name: Publish OTA update
+    needs: [find_build]
+    if: ${{ needs.find_build.outputs.build_id }}
+    type: update
+    environment: preview
+    params:
+      platform: android
+      channel: preview
+      message: ${{ inputs.message }}
+
+  build_android:
+    name: Build new preview APK (native code changed)
+    needs: [find_build]
+    if: ${{ !needs.find_build.outputs.build_id }}
+    type: build
+    params:
+      platform: android
+      profile: preview
+      message: ${{ inputs.message }}

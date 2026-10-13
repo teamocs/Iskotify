@@ -1,0 +1,19 @@
+# Manual only: builds the Play Store bundle (AAB, "production" profile, auto
+# increments versionCode). Store submission stays a separate, deliberate step.
+# Run with: npx eas workflow:run .eas/workflows/production-android.yml
+name: Production build (Android)
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  cancel_in_progress: false
+  group: production-android
+
+jobs:
+  build_android:
+    name: Build production AAB
+    type: build
+    params:
+      platform: android
+      profile: production
