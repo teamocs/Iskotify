@@ -23,8 +23,7 @@ describe('Expo project ownership', () => {
     // The app has no camera, microphone, overlay or shared-storage feature:
     // exports go through the system file picker (SAF) and the DocumentPicker,
     // and the database lives in app-private storage. Libraries can merge these
-    // into the manifest, so they are blocked explicitly. DETECT_SCREEN_CAPTURE
-    // (expo-screen-capture) is deliberately NOT here.
+    // into the manifest, so they are blocked explicitly.
     expect(app.android.blockedPermissions).toEqual([
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.WRITE_EXTERNAL_STORAGE',

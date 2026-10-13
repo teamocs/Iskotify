@@ -92,7 +92,10 @@ export const userSettings = sqliteTable('user_settings', {
   // Legacy: the app has one (light) palette. Kept because SQLite columns are
   // append-only (db/client.ts migrations); nothing reads or writes it.
   theme: text('theme').notNull().default('system'),
-  focusModeEnabled: integer('focus_mode_enabled', { mode: 'boolean' }).notNull().default(true),
+  // focus_mode_enabled (db/client.ts) is left out on purpose: the screen-capture
+  // focus mode it controlled is gone, and leaving it out keeps it off the
+  // backup (sync.ts pushes the selected row). The SQLite column stays because
+  // migrations are append-only; its DEFAULT 1 covers every insert.
   googleCalendarConnected: integer('google_calendar_connected', { mode: 'boolean' }).notNull().default(false),
   incomeBracket: text('income_bracket'),
   gwa: real('gwa'),
