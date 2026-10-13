@@ -5,6 +5,8 @@ import type { NextRequest } from 'next/server'
 // Endpoints that bypass Supabase session auth:
 // - Operator endpoints authenticate via x-admin-secret header
 // - The Places proxy is called by the mobile app (no admin session)
+// Matched EXACTLY: none has sub-routes, and a prefix match would exempt any
+// future look-alike route (e.g. /api/kb/drive-sync-admin).
 const OPERATOR_ENDPOINTS = [
   '/api/flashcards/backfill',
   '/api/flashcards/distractors',
@@ -43,7 +45,7 @@ export async function middleware(request: NextRequest) {
   if (WEBHOOK_ENDPOINTS.includes(request.nextUrl.pathname)) {
     return NextResponse.next({ request })
   }
-  if (OPERATOR_ENDPOINTS.some(p => request.nextUrl.pathname.startsWith(p))) {
+  if (OPERATOR_ENDPOINTS.includes(request.nextUrl.pathname)) {
     return NextResponse.next({ request })
   }
 
