@@ -22,6 +22,8 @@ const ROOT = path.resolve(__dirname, '../../..')
 const SCOPE = [
   'app/(tabs)/practice.tsx',
   'app/practice',
+  // Listed on its own too, so a future narrowing of 'app/practice' cannot drop it.
+  'app/practice/review',
   'app/subjects',
   'app/notes',
   'app/estimator',
@@ -42,7 +44,7 @@ function walk(rel: string): string[] {
   })
 }
 
-const FILES = SCOPE.flatMap(walk)
+const FILES = Array.from(new Set(SCOPE.flatMap(walk)))
 
 /** Strip line and block comments so documentation can still name a colour. */
 function codeOnly(src: string): string {
@@ -316,6 +318,29 @@ describe('Practice area design-token hygiene', () => {
     expectNone(copyHits(/\bpassed\b|\bfailed\b|\bpass\b|\bfail\b|below (the )?cut-?off|above (the )?cut-?off|percentile|top tier|on track for/i))
     // scoreBand() labels a score "Top tier" / "Foundational": a verdict by another name.
     expectNone(scan(/\bscoreBand\b/))
+  })
+
+  it('scans the topic review (app/practice/review)', () => {
+    expect(FILES.some(f => /practice[\\/]review[\\/]\[slug\]\.tsx$/.test(f))).toBe(true)
+  })
+
+  it('never shows a topic/subject strength verdict (Weak / Strong badge, tone keyed to it)', () => {
+    const hits: Hit[] = []
+    for (const file of FILES) {
+      const sf = parse(file)
+      const visit = (n: ts.Node) => {
+        // A JSX attribute or child that renders `*.strength` puts the verdict on screen.
+        if ((ts.isJsxAttribute(n) || ts.isJsxExpression(n)) && /\.strength\b|STRENGTH_TONE/.test(n.getText(sf))
+          && (ts.isJsxExpression(n) ? ts.isJsxElement(n.parent) || ts.isJsxAttribute(n.parent) : true)) {
+          hits.push({ file, line: lineOf(sf, n), text: n.getText(sf).slice(0, 100) })
+          return
+        }
+        ts.forEachChild(n, visit)
+      }
+      visit(sf)
+    }
+    expectNone(hits)
+    expectNone(scan(/STRENGTH_TONE/))
   })
 
   it('keeps status colours off scores: the results card and by-skill bars stay neutral', () => {

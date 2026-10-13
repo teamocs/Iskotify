@@ -4,11 +4,11 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { listings as listingsTable } from '../../../db/schema'
-import { usePracticeData, type Strength, type TopicRow } from '../../../hooks/usePracticeData'
+import { usePracticeData, type TopicRow } from '../../../hooks/usePracticeData'
 import { groupTopicsBySubject } from '../../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../../../components/SubjectAccordion'
 import { ListRow } from '../../../components/ui/ListRow'
-import { Badge } from '../../../components/ui/Badge'
+import { Text as RoleText } from '../../../components/ui/Text'
 import { Screen } from '../../../components/ui/Screen'
 import { TwoColumn } from '../../../components/ui/TwoColumn'
 import { Card } from '../../../components/ui/Card'
@@ -23,22 +23,25 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Book1Outlined } from '@lineiconshq/free-icons'
 import { spacing, iosTextStyle } from '../../../theme/tokens'
 
-// Maps a topic strength to a design-system Badge tone (mirrors practice.tsx).
-const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warning' | 'danger'> = {
-  New: 'accent', Weak: 'danger', Review: 'warning', Strong: 'success',
-}
-
-// ── Topic row (mirrors practice.tsx's TopicCard) ────────────────────────────────
+// ── Topic row ───────────────────────────────────────────────────────────────────
+// iOS redesign P4: a topic shows its accuracy as a neutral number (the same
+// ink at any score), or "New" before it is practised. Never a Weak / Strong
+// verdict badge or a tone keyed to the score.
 
 function TopicCard({ row }: { row: TopicRow }) {
   const { theme: t } = useTheme()
+  const practised = row.accuracy != null
   return (
     <ListRow
       leading={<Lineicons icon={Book1Outlined} size={18} color={t.textSecondary} />}
       title={row.topic.name}
       subtitle={`${row.cardCount} cards`}
-      trailing={<Badge label={row.strength} tone={STRENGTH_TONE[row.strength]} />}
-      accessibilityLabel={`${row.topic.name}, ${row.cardCount} cards, ${row.strength}`}
+      trailing={(
+        <RoleText role="headline" color={t.textSecondary} style={{ fontVariant: ['tabular-nums'] }} maxFontSizeMultiplier={1.6}>
+          {practised ? `${row.accuracy}%` : 'New'}
+        </RoleText>
+      )}
+      accessibilityLabel={`${row.topic.name}, ${row.cardCount} cards, ${practised ? `${row.accuracy}% so far` : 'not practised yet'}`}
       onPress={() => router.push(`/practice/${row.topic.id}`)}
     />
   )
@@ -127,7 +130,7 @@ export default function PracticeReviewScreen() {
   const hero = nextTopic ? (
     <Card elevated testID="review-next-step" style={{ padding: spacing.xl, gap: spacing.md }}>
       <Text {...heading(2)} style={iosTextStyle('headline', t.textSecondary)} maxFontSizeMultiplier={2}>
-        {nextTopic.accuracy != null ? 'Start with your weakest topic' : 'Start here'}
+        {nextTopic.accuracy != null ? 'Focus here next' : 'Start here'}
       </Text>
       <View style={{ gap: spacing.xs }}>
         <Text style={iosTextStyle('title3', t.textPrimary)} maxFontSizeMultiplier={1.6}>{nextTopic.topic.name}</Text>
