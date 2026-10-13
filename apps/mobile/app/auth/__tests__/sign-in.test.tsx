@@ -37,17 +37,6 @@ jest.mock('../../../services/pwnedPasswords', () => ({
   checkPwnedPassword: (...args: any[]) => mockCheckPwnedPassword(...args),
 }))
 
-// The device's accessibility facts as a fixed value. The real store resolves
-// AccessibilityInfo asynchronously and pushes the result to every subscriber
-// (SegmentedControl, Glass, PressableScale…) outside act(); under the fake
-// timers below that update could land in the middle of an awaited act() and
-// leave it waiting (CI run 38355062895). A static value keeps the screen's
-// renders deterministic.
-jest.mock('../../../hooks/usePlatformCapabilities', () => ({
-  ...jest.requireActual('../../../hooks/usePlatformCapabilities'),
-  usePlatformCapabilities: () => ({ liquidGlass: false, blurTier: 'opaque', reduceTransparency: false, reduceMotion: false }),
-}))
-
 // One Tap no-op in tests
 jest.mock('../../../hooks/useGoogleOneTap', () => ({
   useGoogleOneTap: () => undefined,
