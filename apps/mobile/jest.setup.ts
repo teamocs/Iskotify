@@ -61,19 +61,6 @@ jest.mock('react-native-keyboard-controller', () => {
   }
 })
 
-// expo-screen-capture: stub the async prevent/allow APIs
-jest.mock('expo-screen-capture', () => ({
-  preventScreenCaptureAsync: jest.fn().mockResolvedValue(undefined),
-  allowScreenCaptureAsync: jest.fn().mockResolvedValue(undefined),
-}))
-
-// expo-navigation-bar: stub setVisibilityAsync + setBehaviorAsync
-jest.mock('expo-navigation-bar', () => ({
-  setVisibilityAsync: jest.fn().mockResolvedValue(undefined),
-  setBehaviorAsync: jest.fn().mockResolvedValue(undefined),
-  getVisibilityAsync: jest.fn().mockResolvedValue('visible'),
-}))
-
 // expo-image: no native module under jest — shim with a plain RN Image host
 // component (same props surface: source/style/onError/accessibility*) and a
 // jest.fn() static `prefetch` so offline-prefetch tests can assert calls

@@ -462,7 +462,7 @@ describe('pullUserData', () => {
     expect(rows[0]).toMatchObject({ kind: 'mock', attemptKey: 4242, subtest: 'Mathematics' })
   })
 
-  it('restores full settings row including selectedListingSlug, notificationsEnabled, theme, focusModeEnabled', async () => {
+  it('restores full settings row including selectedListingSlug, notificationsEnabled, theme; ignores legacy focusModeEnabled', async () => {
     const fromBuilder = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -501,7 +501,8 @@ describe('pullUserData', () => {
     expect(s.notificationsEnabled).toBe(false)
     // A legacy theme in an old backup is ignored: there is one palette.
     expect(s.theme).toBe('system')
-    expect(s.focusModeEnabled).toBe(false)
+    // Focus mode is gone: an old backup's key is neither restored nor kept.
+    expect(s).not.toHaveProperty('focusModeEnabled')
   })
 
   it('restores user_requirements from remote', async () => {
