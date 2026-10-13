@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import { inArray } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { flashcardSrs } from '../db/schema'
+import type { DrizzleClient } from '../db/client'
 import { scheduleWebPersist } from '../db/webPersist'
 import { invalidate } from '../services/queryCache'
-import { applyReview, type Grade, type SrsCardState } from '../utils/srs'
+import { applyReview, scheduleReview, type Grade, type SrsCardState } from '../utils/srs'
 import { markPlanItemsDoneForSrsReview } from '../services/studyPlan'
 
 export interface SrsReviewInput {
@@ -11,6 +13,11 @@ export interface SrsReviewInput {
   correct: boolean
   /** Cumulative dwell time on the question, from utils/attemptTiming.ts. */
   elapsedMs: number
+  /**
+   * A self-graded review (components/practice/FlashcardStack): when given it
+   * is scheduled as-is and `correct`/`elapsedMs` are not used to derive one.
+   */
+  grade?: Grade
 }
 
 function rowToState(row: typeof flashcardSrs.$inferSelect): SrsCardState {
@@ -58,12 +65,10 @@ export function useRecordSrs() {
       // up the ladder nor lapse it).
       if (existingRow && existingRow.dueAt > now) continue
       scheduledCount++
-      const nextState = applyReview(
-        existingRow ? rowToState(existingRow) : null,
-        review.correct,
-        review.elapsedMs,
-        now,
-      )
+      const prior = existingRow ? rowToState(existingRow) : null
+      const nextState = review.grade
+        ? scheduleReview(prior, review.grade, now)
+        : applyReview(prior, review.correct, review.elapsedMs, now)
       await db.insert(flashcardSrs)
         .values({ flashcardId: review.flashcardId, ...nextState })
         .onConflictDoUpdate({ target: flashcardSrs.flashcardId, set: nextState })
@@ -83,4 +88,37 @@ export function useRecordSrs() {
   }
 
   return { recordSrs }
+}
+
+/**
+ * readSrsStates — the stored schedule for each of `ids` that has a
+ * flashcard_srs row. An id with no row (never reviewed) is absent; callers
+ * treat it as utils/srs.ts's newSrsState() (previewIntervals(null, …)).
+ */
+export async function readSrsStates(db: DrizzleClient, ids: string[]): Promise<Map<string, SrsCardState>> {
+  if (ids.length === 0) return new Map()
+  const rows = await db.select().from(flashcardSrs).where(inArray(flashcardSrs.flashcardId, ids))
+  return new Map(rows.map(r => [r.flashcardId, rowToState(r)]))
+}
+
+/**
+ * useSrsStates — readSrsStates for a review queue, so the card stack can show
+ * each grade's next interval from the card's real schedule. Read once per id
+ * set; a failed read leaves the map empty and `loaded` false (the stack then
+ * shows the grades without intervals rather than inventing them).
+ */
+export function useSrsStates(ids: string[]): { states: Map<string, SrsCardState>; loaded: boolean } {
+  const db = useDb()
+  const key = JSON.stringify(ids)
+  const [result, setResult] = useState<{ key: string | null; states: Map<string, SrsCardState> }>({ key: null, states: new Map() })
+
+  useEffect(() => {
+    let alive = true
+    readSrsStates(db, JSON.parse(key) as string[])
+      .then(states => { if (alive) setResult({ key, states }) })
+      .catch(err => console.warn('[useSrsStates] read failed:', err))
+    return () => { alive = false }
+  }, [db, key])
+
+  return result.key === key ? { states: result.states, loaded: true } : { states: new Map(), loaded: false }
 }

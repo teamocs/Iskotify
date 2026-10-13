@@ -18,6 +18,14 @@ jest.mock('../../../../components/practice/FlashcardExam', () => ({
     return <Text testID="exam">{`exam:${questions.map((q: any) => q.id).join(',')}`}</Text>
   },
 }))
+// iOS redesign P4: "Due today" is the self-graded card stack; Quick/Full stay MCQ.
+jest.mock('../../../../components/practice/FlashcardStack', () => ({
+  ...jest.requireActual('../../../../components/practice/FlashcardStack'),
+  FlashcardStack: ({ cards, title, deckId }: any) => {
+    const { Text } = require('react-native')
+    return <Text testID="stack">{`stack:${title}|${deckId}|${cards.map((c: any) => `${c.id}:${c.answer}`).join(',')}`}</Text>
+  },
+}))
 const mockGetDue = jest.fn()
 jest.mock('../../../../services/srsAggregates', () => ({ getDueFlashcards: (...a: any[]) => mockGetDue(...a) }))
 
@@ -53,6 +61,7 @@ describe('saved deck chooser — redesign M3', () => {
     const hero = screen.getByTestId('chooser-recommended')
     fireEvent.press(within(hero).getByRole('button', { name: /Start quick set/ }))
     expect(screen.getByTestId('exam').props.children).toMatch(/^exam:/)
+    expect(screen.queryByTestId('stack')).toBeNull()
   })
 
   it('recommends due cards first when some are due', async () => {
@@ -61,7 +70,8 @@ describe('saved deck chooser — redesign M3', () => {
     render(<DeckQuizScreen />)
     await act(async () => {})
     fireEvent.press(within(screen.getByTestId('chooser-recommended')).getByRole('button', { name: /Start review/ }))
-    expect(screen.getByTestId('exam').props.children).toBe('exam:c2')
+    expect(screen.getByTestId('stack').props.children).toBe('stack:Weak spots|d1|c2:a')
+    expect(screen.queryByTestId('exam')).toBeNull()
   })
 
   it('shows an empty state with one way back when the deck is missing', async () => {

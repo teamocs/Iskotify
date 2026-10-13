@@ -11,6 +11,7 @@ import { QuestionCard } from './QuestionCard'
 import { OptionList } from './OptionList'
 import { ExamReviewSheet } from './ExamReviewSheet'
 import { ResultsScoreCard } from './ResultsScoreCard'
+import { resultCounts, reviewAnswersLabel } from './resultsCopy'
 import { QuestionNavPanel } from './QuestionNavPanel'
 import { RunnerFrame } from './runner/RunnerFrame'
 import { RunnerActions } from './runner/RunnerActions'
@@ -210,15 +211,16 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   if (phase === 'results') {
     const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
     const pct = Math.round((score / questions.length) * 100)
+    const counts = resultCounts(questions.map(q => ({ correctIndex: q.answerIndex })), answers)
 
     return (
       <Screen>
         <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
           {/* Peak-end moment: warm, short, then the facts. Never a verdict. */}
-          <PageTitle title="Tapos na! Quiz complete." lead={`Here is how ${title} went.`} />
+          <PageTitle title="Quiz complete." lead={`Here is how ${title} went.`} />
 
           {/* Fix 3: one neutral card regardless of score — no pass/fail colouring. */}
-          <ResultsScoreCard pct={pct} correct={score} total={questions.length} />
+          <ResultsScoreCard pct={pct} correct={score} total={questions.length} wrong={counts.wrong} skipped={counts.skipped} />
 
           <RunnerReview
             items={questions.map((q, i) => ({
@@ -240,12 +242,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
             expandAll={reviewMistakesTapped}
           />
 
-          {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
+          {/* Fix 3 + P4: one primary "Review N answers", a tinted retake, the rest quiet. */}
           <View style={{ gap: spacing.sm }}>
-            <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
+            <Button label={reviewAnswersLabel(counts.wrong + counts.skipped)} onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
             <Button
               label="Retake exam"
-              variant="secondary"
+              variant="tinted"
               fullWidth
               onPress={() => {
                 setAnswers({})
@@ -265,7 +267,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
             />
             <Button
               label="Share score"
-              variant="secondary"
+              variant="ghost"
               fullWidth
               accessibilityLabel={`Share your score of ${pct} percent`}
               onPress={() => void Share.share({ message: `I scored ${pct}% on ${title} in Iskotify!` })}
@@ -295,14 +297,13 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           answered={answeredIdxs.size}
           onLeave={onExit}
           leaveLabel="Exit exam"
-          onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
+          onFlag={() => setReportIdx(idx)}
+          flagged={!!reported[idx]}
         />
       }
       question={
         <QuestionCard
           questionText={q.stem}
-          reported={reported[idx]}
-          onReport={() => setReportIdx(idx)}
           imageUrl={q.imageUrl}
           imageAlt={q.imageAlt}
           imageWidth={q.imageWidth}
@@ -326,8 +327,9 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           answered={sel !== undefined}
           submitting={submitting}
           onBack={() => setIdx(i => Math.max(0, i - 1))}
-          onSkip={() => setIdx(i => i + 1)}
-          onNext={() => setIdx(i => i + 1)}
+          onQuestions={expanded ? undefined : () => setReviewOpen(true)}
+          onSkip={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
+          onNext={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
           onReview={() => setReviewOpen(true)}
           labels={{
             back: 'Previous question',

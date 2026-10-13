@@ -141,6 +141,38 @@ describe('PracticeReviewScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/practice/t2')
   })
 
+  // iOS redesign P4 review: a topic shows a neutral number, never a
+  // Weak/Strong verdict badge or a pass/fail tone colour.
+  it('shows each topic\'s accuracy as a neutral number (New when unpractised), never Weak/Strong', async () => {
+    mockUsePracticeData.mockReturnValue({
+      ...twoTopics,
+      topicRows: [
+        ...twoTopics.topicRows,
+        { topic: { id: 't3', name: 'Functions', subjectId: 's1' }, strength: 'New' as const, cardCount: 4, lastPracticedAt: null, accuracy: null },
+      ],
+      topicIdsByListingSlug: { upcat: ['t1', 't2', 't3'] },
+    })
+    render(<PracticeReviewScreen />)
+    await act(async () => {})
+    for (const word of ['Weak', 'Strong', 'Review']) expect(screen.queryByText(word)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Quadratics, 8 cards, 40% so far' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Linear Equations, 12 cards, 90% so far' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Functions, 4 cards, not practised yet' })).toBeTruthy()
+    const pct = screen.getAllByText('40%').find(n => !!n.props.style)!
+    const flat = Object.assign({}, ...[pct.props.style].flat(Infinity).filter(Boolean))
+    expect(flat.fontVariant).toEqual(['tabular-nums'])
+    expect(flat.color).toBe('#6b3737') // textSecondary: the same ink at any score
+    expect(screen.getAllByText('New').length).toBeGreaterThan(0)
+  })
+
+  it('frames the next step calmly ("Focus here next"), never "weakest"', async () => {
+    mockUsePracticeData.mockReturnValue(twoTopics)
+    render(<PracticeReviewScreen />)
+    await act(async () => {})
+    expect(within(screen.getByTestId('review-next-step')).getByText('Focus here next')).toBeTruthy()
+    expect(screen.queryByText(/weakest/i)).toBeNull()
+  })
+
   it('draws the subject chevron as an icon, never a ▼/▶ glyph', async () => {
     mockUsePracticeData.mockReturnValue(twoTopics)
     render(<PracticeReviewScreen />)

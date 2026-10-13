@@ -1,13 +1,13 @@
-import { useMemo } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { View } from 'react-native'
 import { QuestionFigure } from './QuestionFigure'
 import { useTheme } from '../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Bulb2Outlined } from '@lineiconshq/free-icons'
+import { Bulb2Outlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { decorative } from '../ui/a11y'
+import { Text } from '../ui/Text'
 import { spacing, radius, weight } from '../../theme/tokens'
-
-const LETTERS = ['A', 'B', 'C', 'D'] as const
+import { AnimatedCheck } from './AnimatedCheck'
+import { optionLetter } from './OptionList'
 
 export interface ReviewCardProps {
   /** 1-based question number, shown as "Q{n}." before the stem. */
@@ -36,81 +36,125 @@ export interface ReviewCardProps {
 export const AI_ASSISTED_CAPTION =
   'AI-assisted: the answer choices or explanation were written with AI and reviewed by our team.'
 
+/** The kind status line over a reviewed question (never a verdict, never blame). */
+export function reviewStatusLine(correctIndex: number, selectedIndex: number | undefined): string {
+  const answer = optionLetter(correctIndex)
+  if (selectedIndex === correctIndex) return 'Correct.'
+  if (selectedIndex === undefined) return `Skipped. The answer is ${answer}.`
+  return `Not quite. The answer is ${answer}. Here’s why…`
+}
+
 /**
  * Shared review presentation for all four practice-exam engines (blueprint mock,
  * UPCAT subtest, diagnostic, flashcard quiz) — the results-screen counterpart to
- * QuestionCard/OptionList. Replaces the old single 💡-prefixed 12px text blob with:
- * tone-colored your-answer/correct-answer options, the correct-answer rationale at
- * a readable size, per-option "why it's wrong" rows (only when the data has them),
- * and an optional strategy-tip chip.
+ * QuestionCard/OptionList, in the same choice language (iOS redesign P4):
+ * - a kind status line first ("Not quite. The answer is B. Here's why…");
+ * - the correct choice on successSurface with a successBorder edge, a check
+ *   (spring.bouncy, once) and the word "Correct"; a wrong pick on
+ *   dangerSurface with a dangerBorder edge, a cross and "Your answer". State
+ *   is always in words, never colour alone; the card itself stays neutral;
+ * - the rationale, per-option "why it's wrong" rows (only when the data has
+ *   them), and an optional strategy-tip chip.
  */
 export function ReviewCard({
   index, questionText, options, correctIndex, selectedIndex, explanation, optionExplanations, strategyTip,
   imageUrl, imageAlt, imageWidth, imageHeight, aiAssisted,
 }: ReviewCardProps) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
+  const { theme: t } = useTheme()
   // Per-option explanations are free for everyone (not part of Full Access).
-  const ok = selectedIndex === correctIndex
+  const wrongPick = selectedIndex !== undefined && selectedIndex !== correctIndex
   const wrongRows = (optionExplanations ?? [])
     .map((text, i) => ({ i, text }))
     .filter((r): r is { i: number; text: string } => !!r.text && r.text.trim().length > 0 && r.i !== correctIndex)
   const tip = strategyTip?.trim()
 
   return (
-    <View style={[s.card, ok ? s.cardOk : s.cardBad]}>
-      <Text style={s.qText} maxFontSizeMultiplier={1.5}>
+    <View
+      style={{
+        backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous',
+        padding: spacing.lg, marginBottom: spacing.md, gap: spacing.md,
+      }}
+    >
+      <Text role="headline" maxFontSizeMultiplier={1.5}>
         Q{index}. {questionText}
       </Text>
 
       <QuestionFigure imageUrl={imageUrl} imageAlt={imageAlt} imageWidth={imageWidth} imageHeight={imageHeight} />
 
-      <View style={s.optsWrap}>
+      <Text
+        role="subheadline"
+        color={wrongPick ? t.dangerStrong : selectedIndex === undefined ? t.textSecondary : t.successStrong}
+        style={weight('600')}
+        maxFontSizeMultiplier={1.6}
+      >
+        {reviewStatusLine(correctIndex, selectedIndex)}
+      </Text>
+
+      <View style={{ gap: spacing.xs }}>
         {options.map((o, oi) => {
           const isCorrect = oi === correctIndex
           const isWrongPick = oi === selectedIndex && !isCorrect
           return (
             <View
               key={oi}
-              style={[
-                s.optRow,
-                isCorrect ? s.optRowCorrect : isWrongPick ? s.optRowWrong : null,
-              ]}
+              testID={isCorrect ? 'review-option-correct' : isWrongPick ? 'review-option-wrong' : undefined}
+              style={{
+                minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+                paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+                borderRadius: radius.button, borderCurve: 'continuous', borderWidth: 2,
+                borderColor: isCorrect ? t.successBorder : isWrongPick ? t.dangerBorder : 'transparent',
+                backgroundColor: isCorrect ? t.successSurface : isWrongPick ? t.dangerSurface : t.surface2,
+              }}
             >
-              <View style={[s.optLetter, isCorrect ? s.optLetterCorrect : isWrongPick ? s.optLetterWrong : null]}>
-                <Text
-                  style={[s.optLetterTxt, (isCorrect || isWrongPick) && { color: t.textInverse }]}
-                  maxFontSizeMultiplier={1.3}
-                >
-                  {LETTERS[oi]}
+              <View
+                style={{
+                  minWidth: 26, minHeight: 26, paddingHorizontal: spacing.xs, borderRadius: radius.capsule,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isCorrect ? t.success : isWrongPick ? t.danger : t.surface,
+                }}
+              >
+                <Text role="footnote" color={isCorrect || isWrongPick ? t.textInverse : t.textSecondary} style={weight('700')} maxFontSizeMultiplier={1.3}>
+                  {optionLetter(oi)}
                 </Text>
               </View>
-              <Text
-                style={[s.optTxt, isCorrect && s.optTxtCorrect, isWrongPick && s.optTxtWrong]}
-                maxFontSizeMultiplier={1.5}
-              >
-                {o}
-              </Text>
-              {isCorrect ? <Text style={[s.optMark, { color: t.success }]}>✓</Text> : null}
-              {isWrongPick ? <Text style={[s.optMark, { color: t.danger }]}>✗</Text> : null}
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text role="subheadline" style={isCorrect || isWrongPick ? weight('600') : null} maxFontSizeMultiplier={1.5}>
+                  {o}
+                </Text>
+                {isCorrect ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <AnimatedCheck color={t.successStrong} size={14} />
+                    <Text role="footnote" color={t.successStrong} style={weight('600')} maxFontSizeMultiplier={1.5}>Correct</Text>
+                  </View>
+                ) : isWrongPick ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <View {...decorative}>
+                      <Lineicons icon={XmarkOutlined} size={14} color={t.dangerStrong} />
+                    </View>
+                    <Text role="footnote" color={t.dangerStrong} style={weight('600')} maxFontSizeMultiplier={1.5}>Your answer</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
           )
         })}
       </View>
 
       {explanation ? (
-        <View style={s.explainBlock}>
-          <Text style={s.explainLabel} maxFontSizeMultiplier={1.4}>Why {LETTERS[correctIndex]} is correct</Text>
-          <Text style={s.explainTxt} maxFontSizeMultiplier={1.6}>{explanation}</Text>
+        <View style={{ backgroundColor: t.successSurface, borderRadius: radius.button, borderCurve: 'continuous', padding: spacing.md, gap: spacing.xs }}>
+          <Text role="footnote" color={t.successStrong} style={weight('600')} maxFontSizeMultiplier={1.4}>
+            Why {optionLetter(correctIndex)} is correct
+          </Text>
+          <Text role="body" maxFontSizeMultiplier={1.6}>{explanation}</Text>
         </View>
       ) : null}
 
       {wrongRows.length > 0 ? (
-        <View style={s.wrongBlock}>
-          <Text style={s.explainLabel} maxFontSizeMultiplier={1.4}>Why the others are wrong</Text>
+        <View style={{ backgroundColor: t.surfaceSubtle, borderRadius: radius.button, borderCurve: 'continuous', padding: spacing.md, gap: spacing.xs }}>
+          <Text role="footnote" color={t.textSecondary} style={weight('600')} maxFontSizeMultiplier={1.4}>Why the others are wrong</Text>
           {wrongRows.map(r => (
-            <Text key={r.i} style={s.wrongTxt} maxFontSizeMultiplier={1.6}>
-              <Text style={s.wrongLetter}>{LETTERS[r.i]}. </Text>
+            <Text key={r.i} role="subheadline" color={t.textSecondary} maxFontSizeMultiplier={1.6}>
+              <Text role="subheadline" style={weight('600')}>{optionLetter(r.i)}. </Text>
               {r.text}
             </Text>
           ))}
@@ -118,78 +162,25 @@ export function ReviewCard({
       ) : null}
 
       {tip ? (
-        <View style={s.tipChip} accessible accessibilityLabel={`Strategy tip: ${tip}`}>
+        <View
+          accessible
+          accessibilityLabel={`Strategy tip: ${tip}`}
+          style={{
+            flexDirection: 'row', alignSelf: 'flex-start', gap: spacing.sm,
+            backgroundColor: t.warningSurface, borderWidth: 1, borderColor: t.warningBorder,
+            borderRadius: radius.button, borderCurve: 'continuous', paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+          }}
+        >
           <View {...decorative} style={{ paddingTop: 2 }}>
             <Lineicons icon={Bulb2Outlined} size={16} color={t.warningStrong} />
           </View>
-          <Text style={[s.tipTxt, { flex: 1 }]} maxFontSizeMultiplier={1.5}>{tip}</Text>
+          <Text role="subheadline" color={t.warningStrong} style={[{ flex: 1 }, weight('600')]} maxFontSizeMultiplier={1.5}>{tip}</Text>
         </View>
       ) : null}
 
       {aiAssisted ? (
-        <Text style={s.aiCaption} maxFontSizeMultiplier={1.6}>{AI_ASSISTED_CAPTION}</Text>
+        <Text role="footnote" color={t.textSecondary} maxFontSizeMultiplier={1.6}>{AI_ASSISTED_CAPTION}</Text>
       ) : null}
     </View>
   )
-}
-
-function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<typeof useTheme>['typo']) {
-  return StyleSheet.create({
-    card: {
-      backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border, borderRadius: radius.lg,
-      borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.md,
-    },
-    cardOk: { borderColor: t.success },
-    cardBad: { borderColor: t.danger },
-    // Question stem stays the dominant element, matching QuestionCard's scale.
-    qText: {
-      fontSize: typo.md, color: t.textPrimary, ...weight('600'),
-      lineHeight: Math.round(typo.md * 1.35), marginBottom: spacing.md,
-    },
-    optsWrap: { gap: spacing.xs, marginBottom: spacing.sm },
-    optRow: {
-      flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: t.surface2,
-      borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous',
-      paddingVertical: 9, paddingHorizontal: spacing.md,
-    },
-    optRowCorrect: { backgroundColor: t.successSurface, borderColor: t.success },
-    optRowWrong: { backgroundColor: t.dangerSurface, borderColor: t.danger },
-    optLetter: { width: 22, height: 22, borderRadius: 7, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center' },
-    optLetterCorrect: { backgroundColor: t.success },
-    optLetterWrong: { backgroundColor: t.danger },
-    optLetterTxt: { fontSize: typo.xs, color: t.textSecondary, ...weight('700') },
-    optTxt: { flex: 1, fontSize: typo.sm, color: t.textPrimary, ...weight('400'), lineHeight: Math.round(typo.sm * 1.5) },
-    optTxtCorrect: { color: t.success, ...weight('600') },
-    optTxtWrong: { color: t.danger, ...weight('600') },
-    optMark: { fontSize: typo.sm, fontWeight: '700' },
-    // Correct-answer rationale — the flagship "why" content, bumped well past the
-    // old typo.xs(12px) blob for actual readability.
-    explainBlock: {
-      backgroundColor: t.successSurface, borderRadius: radius.md, borderCurve: 'continuous',
-      padding: spacing.md, marginTop: spacing.xs,
-    },
-    explainLabel: {
-      fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase',
-      letterSpacing: 0.6, marginBottom: 4, ...weight('600'),
-    },
-    explainTxt: { fontSize: typo.base, color: t.textPrimary, ...weight('400'), lineHeight: Math.round(typo.base * 1.5) },
-    // Per-option "why it's wrong" rows — subordinate to the correct-answer block,
-    // still well above the old 12px floor.
-    wrongBlock: {
-      backgroundColor: t.surfaceSubtle, borderRadius: radius.md, borderCurve: 'continuous',
-      padding: spacing.md, marginTop: spacing.sm, gap: 4,
-    },
-    wrongTxt: { fontSize: typo.sm, color: t.textSecondary, ...weight('400'), lineHeight: Math.round(typo.sm * 1.5) },
-    wrongLetter: { color: t.textPrimary, ...weight('600') },
-    aiCaption: {
-      fontSize: typo.xs, color: t.textSecondary, ...weight('400'),
-      lineHeight: Math.round(typo.xs * 1.5), marginTop: spacing.sm,
-    },
-    tipChip: {
-      flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: t.warningSurface, borderWidth: 1,
-      borderColor: t.warningBorder, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm, marginTop: spacing.sm, gap: spacing.sm,
-    },
-    tipTxt: { fontSize: typo.sm, color: t.warningStrong, ...weight('600'), lineHeight: Math.round(typo.sm * 1.4) },
-  })
 }

@@ -11,12 +11,15 @@ import { pickQuestions, dedupeByStem } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
 import { lastSeenOrEmpty } from '../../../services/questionHistory'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
+import { FlashcardStack, toStackCards, type StackCard } from '../../../components/practice/FlashcardStack'
 import { FlashcardModeChooser } from '../../../components/practice/SessionChooser'
 import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'chooser' | 'exam' | 'empty'
+type Phase = 'loading' | 'chooser' | 'exam' | 'review' | 'empty'
+
+type CardRow = Parameters<typeof toStackCards>[1][number]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,6 +47,10 @@ export default function DeckQuizScreen() {
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   // Task H: due-today option — flashcardId → dueAt for cards in this deck that are due now.
   const [dueAtById, setDueAtById] = useState<Record<string, number>>({})
+  // iOS redesign P4: "Due today" is the self-graded card stack, which needs
+  // each card's own answer/explanation (the quiz questions carry options).
+  const cardRowsRef = useRef<CardRow[]>([])
+  const [stackCards, setStackCards] = useState<StackCard[]>([])
 
   // Task H bugfix: see the identical comment in app/practice/[topicId].tsx —
   // count and served set both come from the SAME deduped-by-stem pool so the
@@ -92,6 +99,7 @@ export default function DeckQuizScreen() {
       }
 
       const cardRows = await fetchCards()
+      cardRowsRef.current = cardRows
 
 
       const rawCards: RawCard[] = cardRows.map(row => ({
@@ -150,11 +158,27 @@ export default function DeckQuizScreen() {
     )
   }
 
+  if (phase === 'review') {
+    return (
+      <FlashcardStack
+        title={deckName}
+        cards={stackCards}
+        deckId={deckId}
+        onExit={() => router.back()}
+      />
+    )
+  }
+
   // ── Phase: chooser ────────────────────────────────────────────────────────────
 
   function choose(mode: 'quick' | 'full' | 'due') {
-    const q = mode === 'due' ? dueQuestions : pickQuestions(allQuestions, mode, undefined, { seen: seenRef.current })
-    setExamQuestions(q)
+    if (mode === 'due') {
+      // Same deduped due set the chooser's count was taken from.
+      setStackCards(toStackCards(dueQuestions, cardRowsRef.current))
+      setPhase('review')
+      return
+    }
+    setExamQuestions(pickQuestions(allQuestions, mode, undefined, { seen: seenRef.current }))
     setPhase('exam')
   }
 

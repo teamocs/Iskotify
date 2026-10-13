@@ -1,6 +1,6 @@
 import { Modal, ScrollView, Text, View } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Screen } from '../ui/Screen'
 import { PageTitle } from '../ui/PageTitle'
@@ -36,12 +36,12 @@ function LanguageSection({ title, body, lang }: { title: string; body: string; l
   const { theme: t } = useTheme()
   return (
     <Card style={{ gap: spacing.sm }}>
-      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>
+      <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>
         {title}
       </Text>
       <Text
         {...({ lang } as Record<string, unknown>)}
-        style={textStyle('body', t.textSecondary)}
+        style={iosTextStyle('body', t.textSecondary)}
         maxFontSizeMultiplier={2}
       >
         {body}

@@ -1,7 +1,7 @@
 import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../theme/tokens'
-import { Button } from './Button'
+import { Button, type ButtonVariant } from './Button'
 import { decorative } from './a11y'
 
 interface Props {
@@ -12,10 +12,12 @@ interface Props {
   /** One next step — at most one action. */
   actionLabel?: string
   onAction?: () => void
+  /** `primary` (default). Pass `secondary` when the screen's one primary action lives elsewhere. */
+  actionVariant?: ButtonVariant
 }
 
 /** What to show when there is nothing yet, and the single thing to do about it. */
-export function EmptyState({ icon, title, body, actionLabel, onAction }: Props) {
+export function EmptyState({ icon, title, body, actionLabel, onAction, actionVariant = 'primary' }: Props) {
   const { theme: t } = useTheme()
   return (
     <View style={{ alignItems: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.lg, gap: spacing.md }}>
@@ -38,7 +40,7 @@ export function EmptyState({ icon, title, body, actionLabel, onAction }: Props) 
       ) : null}
       {actionLabel && onAction ? (
         <View style={{ marginTop: spacing.sm }}>
-          <Button label={actionLabel} onPress={onAction} />
+          <Button label={actionLabel} onPress={onAction} variant={actionVariant} />
         </View>
       ) : null}
     </View>

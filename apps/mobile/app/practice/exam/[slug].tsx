@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, Pressable, ScrollView } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronDownOutlined, ChevronUpOutlined, ChevronLeftOutlined } from '@lineiconshq/free-icons'
@@ -20,7 +19,10 @@ import { advanceSectionClocks, clampNavIndex } from '../../../utils/sectionClock
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
-import { subtestBreakdown } from '../../../utils/subtestBreakdown'
+import { subtestBreakdown, nextFocusSubtest } from '../../../utils/subtestBreakdown'
+import { upcatSubtestHref } from '../../../utils/practiceQuickStart'
+import { SUBTESTS } from '../../../utils/upcatExam'
+import { reviewAnswersLabel } from '../../../components/practice/resultsCopy'
 import { groupSectionResults, questionSubtest, isReached } from '../../../utils/examSubmit'
 import type { ExamQuestion, RawUpcatQuestion, RawUpcatPassage } from '../../../utils/upcatExam'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
@@ -32,8 +34,9 @@ import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
 import { ResultsBreakdown } from '../../../components/practice/ResultsBreakdown'
 import { ExamFocusHeader } from '../../../components/practice/ExamFocusHeader'
 import { QuestionNavPanel } from '../../../components/practice/QuestionNavPanel'
+import { RunnerFrame } from '../../../components/practice/runner/RunnerFrame'
+import { RunnerActions } from '../../../components/practice/runner/RunnerActions'
 import { submitQuestionReport } from '../../../services/questionReports'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { Screen } from '../../../components/ui/Screen'
 import { Button } from '../../../components/ui/Button'
 import { StatNumber } from '../../../components/ui/StatNumber'
@@ -43,8 +46,8 @@ import { EmptyState } from '../../../components/ui/EmptyState'
 import { ErrorState } from '../../../components/ui/ErrorState'
 import { decorative, focusRing, type WebPressableState } from '../../../components/ui/a11y'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../../theme/tokens'
-import { useBreakpoint, pagePadding, contentMaxWidth } from '../../../hooks/useBreakpoint'
+import { spacing, radius, iosTextStyle } from '../../../theme/tokens'
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
@@ -60,8 +63,6 @@ type Phase = 'loading' | 'prestart' | 'empty' | 'error' | 'exam' | 'results'
 /** A flattened exam question that remembers which section it belongs to. */
 interface FlatQuestion { q: ExamQuestion; sectionName: string }
 
-/** The reading column: direction C keeps the question at a readable measure on any screen. */
-const READING = contentMaxWidth('reading')
 
 function minutesLabel(minutes: number): { value: string; unit: string } {
   if (minutes < 60) return { value: String(minutes), unit: 'min' }
@@ -187,8 +188,8 @@ function ReviewAccordion({ reviewSections, questions, answers, initiallyExpanded
               }}
             >
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{sec.sectionName}</Text>
-                <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+                <Text style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>{sec.sectionName}</Text>
+                <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
                   {reviewLine}
                 </Text>
               </View>
@@ -235,7 +236,6 @@ export default function BlueprintExam() {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   const expanded = bp === 'expanded'
-  const gutter = pagePadding(bp)
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
@@ -317,7 +317,6 @@ export default function BlueprintExam() {
   // Question pane (middle scroll zone) — reset to top whenever the question changes
   // so scroll offset never carries over between questions.
   const qPaneRef = useRef<ScrollView>(null)
-  const { height: winH } = useWindowDimensions()
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -791,7 +790,7 @@ export default function BlueprintExam() {
       <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
         <View style={{ gap: spacing.xxl, paddingTop: spacing.xs }}>
           <View style={{ gap: spacing.lg }}>
-            <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>
+            <Text accessibilityRole="header" style={iosTextStyle('title1', t.textPrimary)} maxFontSizeMultiplier={1.4}>
               {blueprint.name}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xxxl }}>
@@ -801,7 +800,7 @@ export default function BlueprintExam() {
               <StatNumber value={scaled.value} unit={scaled.unit} label="Time" />
             </View>
             {isScaled ? (
-              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+              <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.6}>
                 The full {blueprint.acronym || blueprint.name} runs {declared.value} {declared.unit}. Today&apos;s Full Mock timer is {scaled.value} {scaled.unit}, matched to the items available now.
               </Text>
             ) : null}
@@ -809,14 +808,14 @@ export default function BlueprintExam() {
 
           {blueprint.mechanicsNote ? (
             <Panel>
-              <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{blueprint.mechanicsNote}</Text>
+              <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{blueprint.mechanicsNote}</Text>
             </Panel>
           ) : null}
 
           {blueprint.hasGuessingPenalty ? (
             <Panel tone="warning">
-              <Text style={textStyle('titleSm', t.warningStrong)} maxFontSizeMultiplier={1.6}>Guessing penalty</Text>
-              <Text style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+              <Text style={iosTextStyle('headline', t.warningStrong)} maxFontSizeMultiplier={1.6}>Guessing penalty</Text>
+              <Text style={iosTextStyle('footnote', t.textPrimary)} maxFontSizeMultiplier={1.6}>
                 Wrong answers deduct {blueprint.guessingPenalty}; blanks are 0. Answer when you are reasonably sure.
               </Text>
             </Panel>
@@ -837,8 +836,8 @@ export default function BlueprintExam() {
                       paddingVertical: spacing.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider,
                     }}
                   >
-                    <Text style={[textStyle('body', live ? t.textPrimary : t.textSecondary), { flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>{sec.name}</Text>
-                    <Text style={[textStyle('bodySm', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.6}>
+                    <Text style={[iosTextStyle('body', live ? t.textPrimary : t.textSecondary), { flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>{sec.name}</Text>
+                    <Text style={[iosTextStyle('footnote', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.6}>
                       {builtSec ? `${builtSec.questions.length} items${blueprint.sectionBlocked && secMinutes ? ` · ${secMinutes} min` : ''}` : 'Not available yet'}
                     </Text>
                   </View>
@@ -856,8 +855,8 @@ export default function BlueprintExam() {
               <View style={{ gap: spacing.sm }}>
                 {visibleNotes.map((cn, i) => (
                   <Panel key={`${cn.courseCluster}-${i}`}>
-                    <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{cn.courseCluster}</Text>
-                    <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>{cn.note}</Text>
+                    <Text style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>{cn.courseCluster}</Text>
+                    <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.6}>{cn.note}</Text>
                   </Panel>
                 ))}
               </View>
@@ -868,8 +867,8 @@ export default function BlueprintExam() {
             {resumeAvailable && resumeStale ? (
               <>
                 <Panel tone="warning">
-                  <Text style={textStyle('titleSm', t.warningStrong)} maxFontSizeMultiplier={1.6}>Your last attempt ran out of time</Text>
-                  <Text style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+                  <Text style={iosTextStyle('headline', t.warningStrong)} maxFontSizeMultiplier={1.6}>Your last attempt ran out of time</Text>
+                  <Text style={iosTextStyle('footnote', t.textPrimary)} maxFontSizeMultiplier={1.6}>
                     You can submit the answers you gave (questions you never reached are not counted), or discard that attempt.
                   </Text>
                 </Panel>
@@ -917,6 +916,9 @@ export default function BlueprintExam() {
 
     // Per-subtest raw breakdown (neutral; see ResultsBreakdown).
     const rows = subtestBreakdown(questions, answers, visitedRef.current)
+    // The tinted drill: only a UPCAT subtest has a drill of its own to open.
+    const focusName = nextFocusSubtest(rows)
+    const drillSubtest = slug === 'upcat' && focusName && (SUBTESTS as readonly string[]).includes(focusName) ? focusName : null
 
     // Wave 3b: grouped review sections with wrong-first ordering
     const correctIndexes = questions.map(fq => fq.q.correctIndex)
@@ -927,10 +929,10 @@ export default function BlueprintExam() {
         <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
           {/* Peak-end moment: warm, short, then the facts. Never a verdict. */}
           <View style={{ gap: spacing.xs }}>
-            <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>
-              Tapos na! Mock complete.
+            <Text accessibilityRole="header" style={iosTextStyle('title1', t.textPrimary)} maxFontSizeMultiplier={1.4}>
+              Mock complete.
             </Text>
-            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+            <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>
               Here is how {blueprint.name} went. Every mock shows you what to practise next.
             </Text>
           </View>
@@ -938,22 +940,24 @@ export default function BlueprintExam() {
           {/* Fix 3: one neutral card regardless of score — no pass/fail colouring,
               no percentile, no cut-off verdict. */}
           <View style={{ gap: spacing.sm }}>
-            <ResultsScoreCard pct={pct} correct={correct} total={total} />
+            <ResultsScoreCard
+              pct={pct}
+              correct={correct}
+              total={total}
+              wrong={wrong}
+              skipped={Math.max(0, total - correct - wrong)}
+              headline={scoreDelta}
+            />
             {blueprint.hasGuessingPenalty ? (
-              <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={1.6}>
+              <Text style={[iosTextStyle('footnote', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={1.6}>
                 Penalty-adjusted: {Math.round(score.adjusted * 100) / 100}
               </Text>
-            ) : null}
-            {scoreDelta ? (
-              <Panel>
-                <Text style={[textStyle('bodySm', t.textPrimary), { textAlign: 'center' }]} maxFontSizeMultiplier={1.6}>{scoreDelta}</Text>
-              </Panel>
             ) : null}
           </View>
 
           <ResultsBreakdown rows={rows} />
           {unreached > 0 ? (
-            <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+            <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
               Questions you never reached are not counted.
             </Text>
           ) : null}
@@ -964,8 +968,8 @@ export default function BlueprintExam() {
               <View style={{ gap: spacing.sm }}>
                 {visibleNotes.map((cn, i) => (
                   <Panel key={`note-${cn.courseCluster}-${i}`}>
-                    <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{cn.courseCluster}</Text>
-                    <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>{cn.note}</Text>
+                    <Text style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>{cn.courseCluster}</Text>
+                    <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.6}>{cn.note}</Text>
                   </Panel>
                 ))}
               </View>
@@ -985,13 +989,17 @@ export default function BlueprintExam() {
           </View>
 
           {blueprint.scoringNote ? (
-            <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{blueprint.scoringNote}</Text>
+            <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{blueprint.scoringNote}</Text>
           ) : null}
 
-          {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
+          {/* Fix 3 + P4: one primary "Review N answers", then a tinted drill of the
+              skill to focus on next (a UPCAT subtest), else a tinted retake. */}
           <View style={{ gap: spacing.sm }}>
-            <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
-            <Button label="Retake exam" variant="secondary" fullWidth onPress={() => router.replace(`/practice/exam/${slug}`)} />
+            <Button label={reviewAnswersLabel(total - correct)} onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
+            {drillSubtest ? (
+              <Button label={`Drill ${drillSubtest}`} variant="tinted" fullWidth onPress={() => router.push(upcatSubtestHref(drillSubtest) as never)} />
+            ) : null}
+            <Button label="Retake exam" variant={drillSubtest ? 'ghost' : 'tinted'} fullWidth onPress={() => router.replace(`/practice/exam/${slug}`)} />
             <Button label="Back to mock exams" variant="ghost" fullWidth onPress={() => router.replace('/practice/exam')} />
           </View>
         </View>
@@ -1023,7 +1031,8 @@ export default function BlueprintExam() {
   const lastInSection = sectionEnd !== undefined && idx === sectionEnd - 1 && !isLast
   const jump = (i: number) => { if (!submitting && i >= floorIdx && (sectionEnd === undefined || i < sectionEnd)) setIdx(i) }
   const jumpSection = (start: number) => { if (!submitting) setIdx(clampNavIndex(start, floorIdx, sectionEnd)) }
-  const stepForward = () => setIdx(i => clampNavIndex(i + 1, floorIdx, sectionEnd))
+  // Never past the last question, even for a second tap that lands before the re-render.
+  const stepForward = () => setIdx(i => clampNavIndex(i + 1, floorIdx, sectionEnd ?? questions.length))
   /** Finish the current section early: confirm, lock it, start the next section's clock. */
   const finishSection = () => {
     const next = sectionIdx + 1
@@ -1056,7 +1065,6 @@ export default function BlueprintExam() {
     )
   }
   const subjectTag = [q.mainSubject || fq.sectionName, q.topic].filter(Boolean).join(' · ')
-  const column = { width: '100%' as const, maxWidth: READING, alignSelf: 'center' as const, paddingHorizontal: gutter }
   const options = (
     <OptionList
       options={q.options}
@@ -1066,111 +1074,67 @@ export default function BlueprintExam() {
     />
   )
 
+  // iOS redesign P4: the shared full-screen frame (glass top bar with the
+  // timer capsules and the flag, glass bottom bar). Exam safety is unchanged:
+  // the last question opens the review sheet (never submits), a section-locked
+  // exam finishes its section explicitly, and Previous never crosses floorIdx.
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <WebTopSpacer />
-      <ExamFocusHeader
-        title={sectionBlocked ? fq.sectionName : (blueprint?.acronym || blueprint?.name || 'Mock Exam')}
-        position={idx + 1}
-        total={questions.length}
-        answered={answeredIdxs.size}
-        remaining={remaining}
-        sectionRemaining={sectionBlocked ? sectionRemaining : null}
-        onLeave={() => router.back()}
-        onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
-      />
-
-      <View style={{ flex: 1, flexDirection: 'row' }}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          {/* Middle pane: passage + question scroll; options live in their own fixed
-              zone below so they never jump as question/passage length changes. */}
-          <ScrollView
-            ref={qPaneRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingTop: spacing.xl, paddingBottom: spacing.lg }}
-            showsVerticalScrollIndicator={false}
-          >
-            <View testID="exam-reading-column" style={column}>
-              <QuestionCard
-                questionText={q.questionText}
-                passageText={q.passageText}
-                subjectTag={subjectTag || undefined}
-                reported={reported[idx]}
-                onReport={() => setReportIdx(idx)}
-                imageUrl={q.imageUrl}
-                imageAlt={q.imageAlt}
-                imageWidth={q.imageWidth}
-                imageHeight={q.imageHeight}
-              />
-              {/* Desktop: options follow the question in the reading column. */}
-              {expanded ? <View style={{ marginTop: spacing.xl }}>{options}</View> : null}
-            </View>
-          </ScrollView>
-
-          {/* Phones/tablets: a fixed options zone, capped at 42% of the window so the
-              question pane keeps the majority of the viewport and the options never
-              jump between questions; very long option lists scroll inside it. */}
-          {expanded ? null : (
-          <ScrollView
-            style={{ flexGrow: 0, maxHeight: winH * 0.42 }}
-            contentContainerStyle={{ paddingVertical: spacing.sm }}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={column}>{options}</View>
-          </ScrollView>
-          )}
-
-          <View style={{ borderTopWidth: 1, borderTopColor: t.divider, backgroundColor: t.bg }}>
-            <View style={[column, { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.md }]}>
-              <Button
-                label="Back"
-                variant="secondary"
-                disabled={!canGoBack || submitting}
-                onPress={() => setIdx(i => Math.max(floorIdx, i - 1))}
-              />
-              {isLast ? (
-                // Fix 2: the last question never submits directly anymore — it opens
-                // a review sheet listing every question's answered/unanswered state,
-                // with an explicit "Submit exam" confirmation inside it.
-                <Button
-                  label="Review & submit"
-                  disabled={submitting}
-                  onPress={() => setReviewOpen(true)}
-                  style={{ flex: 1 }}
-                />
-              ) : lastInSection ? (
-                // Section-locked exams: the last question of a section never steps into
-                // the next one; the student explicitly finishes (and locks) the section.
-                <Button label="Finish section" disabled={submitting} onPress={finishSection} style={{ flex: 1 }} />
-              ) : (
-                <>
-                  <Button label="Skip" variant="ghost" disabled={submitting} onPress={stepForward} />
-                  <Button
-                    label="Next"
-                    disabled={sel === undefined || submitting}
-                    onPress={stepForward}
-                    style={{ flex: 1 }}
-                  />
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {expanded ? (
-          <QuestionNavPanel
-            total={questions.length}
-            currentIdx={idx}
-            answeredIdxs={answeredIdxs}
-            flaggedIdxs={flaggedIdxs}
-            floorIdx={floorIdx}
-            ceilIdx={sectionEnd}
-            onJump={jump}
-            sections={sectionChips}
-            onJumpSection={jumpSection}
-          />
-        ) : null}
-      </View>
+    <RunnerFrame
+      scrollRef={qPaneRef}
+      columnTestID="exam-reading-column"
+      header={
+        <ExamFocusHeader
+          title={sectionBlocked ? fq.sectionName : (blueprint?.acronym || blueprint?.name || 'Mock Exam')}
+          position={idx + 1}
+          total={questions.length}
+          answered={answeredIdxs.size}
+          remaining={remaining}
+          sectionRemaining={sectionBlocked ? sectionRemaining : null}
+          onLeave={() => router.back()}
+          onFlag={() => setReportIdx(idx)}
+          flagged={!!reported[idx]}
+        />
+      }
+      question={
+        <QuestionCard
+          questionText={q.questionText}
+          passageText={q.passageText}
+          subjectTag={subjectTag || undefined}
+          imageUrl={q.imageUrl}
+          imageAlt={q.imageAlt}
+          imageWidth={q.imageWidth}
+          imageHeight={q.imageHeight}
+        />
+      }
+      options={options}
+      actions={
+        <RunnerActions
+          isLast={isLast}
+          canGoBack={canGoBack}
+          answered={sel !== undefined}
+          submitting={submitting}
+          onBack={() => setIdx(i => Math.max(floorIdx, i - 1))}
+          onNext={stepForward}
+          onReview={() => setReviewOpen(true)}
+          onQuestions={expanded ? undefined : () => setReviewOpen(true)}
+          lastInSection={lastInSection}
+          onFinishSection={finishSection}
+        />
+      }
+      navPanel={
+        <QuestionNavPanel
+          total={questions.length}
+          currentIdx={idx}
+          answeredIdxs={answeredIdxs}
+          flaggedIdxs={flaggedIdxs}
+          floorIdx={floorIdx}
+          ceilIdx={sectionEnd}
+          onJump={jump}
+          sections={sectionChips}
+          onJumpSection={jumpSection}
+        />
+      }
+    >
 
       <ExamReviewSheet
         visible={reviewOpen}
@@ -1207,6 +1171,6 @@ export default function BlueprintExam() {
           setReportIdx(null)
         }}
       />
-    </SafeAreaView>
+    </RunnerFrame>
   )
 }

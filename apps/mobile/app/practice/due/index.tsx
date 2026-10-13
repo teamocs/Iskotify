@@ -11,12 +11,12 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
-import { FlashcardExam } from '../../../components/practice/FlashcardExam'
+import { FlashcardStack, toStackCards, type StackCard } from '../../../components/practice/FlashcardStack'
 import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'exam' | 'empty'
+type Phase = 'loading' | 'review' | 'empty'
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -25,8 +25,13 @@ type Phase = 'loading' | 'exam' | 'empty'
  * due cards" row. Unlike the topic/deck/listing choosers (which offer
  * Quick/Full/Due as sibling options on an already-scoped card pool), this
  * screen IS the due queue: it draws from every published flashcard, so it
- * skips straight to the exam instead of showing a redundant chooser step —
+ * skips straight to the review instead of showing a redundant chooser step —
  * the tab row already told the student how many cards ("N cards ready").
+ *
+ * iOS redesign P4: the review is the self-graded card stack
+ * (components/practice/FlashcardStack), not a multiple-choice quiz. The
+ * served set is still built through the quiz pipeline (dedupe by stem,
+ * most-overdue first, capped) so it matches the count the tab promised.
  *
  * deckId is the '__due__' sentinel (see hooks/useAnalytics.ts's
  * computeTopicMastery / recentSessions title mapping) so these sessions don't
@@ -38,7 +43,7 @@ export default function DueReviewScreen() {
   const { theme: t } = useTheme()
 
   const [phase, setPhase] = useState<Phase>('loading')
-  const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
+  const [stackCards, setStackCards] = useState<StackCard[]>([])
 
 
   useEffect(() => {
@@ -85,8 +90,9 @@ export default function DueReviewScreen() {
       const parsed = buildQuizQuestions(rawCards)
       const ordered = pickQuestions(parsed, 'due', dueAtById)
       prefetchSessionImages(ordered) // fire-and-forget; never blocks session start
-      setExamQuestions(ordered)
-      setPhase(ordered.length === 0 ? 'empty' : 'exam')
+      const served = toStackCards(ordered, cardRows)
+      setStackCards(served)
+      setPhase(served.length === 0 ? 'empty' : 'review')
     }
     void load()
   }, [db])
@@ -105,9 +111,9 @@ export default function DueReviewScreen() {
   }
 
   return (
-    <FlashcardExam
+    <FlashcardStack
       title="Due today"
-      questions={examQuestions}
+      cards={stackCards}
       deckId="__due__"
       onExit={() => router.back()}
     />

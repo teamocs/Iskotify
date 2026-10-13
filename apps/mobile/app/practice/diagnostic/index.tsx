@@ -27,11 +27,12 @@ import { RunnerReview } from '../../../components/practice/runner/RunnerReview'
 import { Screen } from '../../../components/ui/Screen'
 import { PageTitle } from '../../../components/ui/PageTitle'
 import { Button } from '../../../components/ui/Button'
-import { SectionHeader } from '../../../components/ui/SectionHeader'
-import { ProgressBar } from '../../../components/ui/ProgressBar'
+import { ResultsBreakdown } from '../../../components/practice/ResultsBreakdown'
+import { resultCounts } from '../../../components/practice/resultsCopy'
+import { isReached } from '../../../utils/examSubmit'
 import { DetailTopBar } from '../../../components/explore/DetailTopBar'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../../theme/tokens'
+import { spacing, iosTextStyle } from '../../../theme/tokens'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
@@ -588,6 +589,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     const unreached = questions.length - score.overall.total
     const overallPct = score.overall.total ? Math.round((score.overall.correct / score.overall.total) * 100) : 0
     const weakest = weakestSubject(score.bySubject)
+    const counts = resultCounts(questions.map(q => ({ correctIndex: q.answerIndex })), answers, i => isReached(i, answers, visitedRef.current))
     return (
       <Screen>
         <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
@@ -599,33 +601,27 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
           />
 
           {/* Neutral: the same ink at any score, never a pass/fail colour. */}
-          <ResultsScoreCard pct={overallPct} correct={score.overall.correct} total={score.overall.total} />
+          <ResultsScoreCard
+            pct={overallPct}
+            correct={score.overall.correct}
+            total={score.overall.total}
+            wrong={counts.wrong}
+            skipped={counts.skipped}
+          />
 
-          <View>
-            <SectionHeader title={isBlueprint ? 'Per-section readiness' : 'Per-subject readiness'} />
-            <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
-              {Object.entries(score.bySubject).map(([subject, b], i) => {
-                const pct = b.total ? Math.round((b.correct / b.total) * 100) : 0
-                return (
-                  <View key={subject} style={{ paddingVertical: spacing.md, gap: spacing.sm, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider }}>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md }}>
-                      <Text style={[textStyle('titleSm', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={2}>{subject}</Text>
-                      <Text style={[textStyle('bodySm', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={2}>
-                        {b.correct}/{b.total} correct · {pct}%
-                      </Text>
-                    </View>
-                    <ProgressBar value={pct / 100} label={`${subject} readiness`} />
-                  </View>
-                )
-              })}
-            </View>
+          <View style={{ gap: spacing.sm }}>
+            <ResultsBreakdown
+              rows={Object.entries(score.bySubject).map(([subject, b]) => ({
+                name: subject, correct: b.correct, total: b.total, pct: b.total ? Math.round((b.correct / b.total) * 100) : 0,
+              }))}
+            />
             {unreached > 0 ? (
-              <Text style={[textStyle('caption', t.textSecondary), { marginTop: spacing.sm }]} maxFontSizeMultiplier={2}>
+              <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
                 Questions you never reached are not counted.
               </Text>
             ) : null}
             {isBlueprint && comingSoon.length > 0 ? (
-              <Text style={[textStyle('caption', t.textSecondary), { marginTop: spacing.sm }]} maxFontSizeMultiplier={2}>
+              <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
                 {`Not available yet: ${comingSoon.join(', ')}. These sections have no questions to sample.`}
               </Text>
             ) : null}
@@ -653,7 +649,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
             // The web glimpse (P4): the one next step is a free account. The run is
             // already on this device and joins the account made here.
             <View style={{ gap: spacing.sm }}>
-              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+              <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
                 These results stay on this device. Create a free account to keep them and get practice built around them.
               </Text>
               <Button label="Create a free account to save this and keep practising" onPress={() => router.push(GUEST_SIGNUP_HREF)} fullWidth size="lg" />
@@ -706,7 +702,6 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
           answered={answeredIdxs.size}
           remaining={remaining}
           onLeave={() => router.back()}
-          onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
         />
       }
       question={
@@ -735,8 +730,9 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
           answered={sel !== undefined}
           submitting={submitting}
           onBack={() => setIdx(i => Math.max(0, i - 1))}
-          onSkip={() => setIdx(i => i + 1)}
-          onNext={() => setIdx(i => i + 1)}
+          onQuestions={expanded ? undefined : () => setReviewOpen(true)}
+          onSkip={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
+          onNext={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
           onReview={() => setReviewOpen(true)}
         />
       }

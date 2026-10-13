@@ -115,5 +115,44 @@ describe('OptionList', () => {
     fireEvent.press(screen.getByText('Cebu'))
     expect(onSelect).not.toHaveBeenCalled()
   })
-})
 
+  // iOS redesign P4: choice states
+  it('draws the selected choice with a 2pt accent edge, an accentSurface fill and a filled disc', () => {
+    render(<OptionList options={OPTIONS} selectedIndex={1} onSelect={jest.fn()} />)
+    const [checked] = screen.getAllByRole('radio', { checked: true })
+    const flat = Object.assign({}, ...[checked!.props.style].flat(Infinity).filter(Boolean))
+    expect(flat.borderWidth).toBe(2)
+    expect(flat.borderColor).toBe('#800000')
+    expect(flat.backgroundColor).toBe('rgba(128,0,0,0.10)')
+    expect(flat.borderRadius).toBe(14)
+  })
+
+  it('letter discs are at least 26pt and grow with the text (no fixed height)', () => {
+    render(<OptionList options={OPTIONS} selectedIndex={undefined} onSelect={jest.fn()} />)
+    for (const disc of screen.getAllByTestId('option-letter-disc')) {
+      const flat = Object.assign({}, ...[disc.props.style].flat(Infinity).filter(Boolean))
+      expect(flat.minHeight).toBe(26)
+      expect(flat.minWidth).toBe(26)
+      expect(flat.height).toBeUndefined()
+    }
+  })
+
+  it('reveal: the correct choice says Correct (with a check), a wrong pick says Your answer, in the radio name', () => {
+    render(<OptionList options={OPTIONS} selectedIndex={2} onSelect={jest.fn()} reveal={{ correctIndex: 1 }} />)
+    const radios = screen.getAllByRole('radio')
+    expect(within(radios[1]!).getByText('Correct')).toBeTruthy()
+    expect(within(radios[2]!).getByText('Your answer')).toBeTruthy()
+    expect(screen.getAllByTestId('animated-check', { includeHiddenElements: true })).toHaveLength(1)
+    const flat = (n: any) => Object.assign({}, ...[n.props.style].flat(Infinity).filter(Boolean))
+    expect(flat(radios[1]).backgroundColor).toBe('rgba(21,128,61,0.10)')
+    expect(flat(radios[1]).borderColor).toBe('rgba(21,128,61,0.80)')
+    expect(flat(radios[2]).backgroundColor).toBe('rgba(185,28,28,0.10)')
+  })
+
+  it('reveal: choices stop taking presses', () => {
+    const onSelect = jest.fn()
+    render(<OptionList options={OPTIONS} selectedIndex={0} onSelect={onSelect} reveal={{ correctIndex: 0 }} />)
+    fireEvent.press(screen.getByText('Cebu'))
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+})

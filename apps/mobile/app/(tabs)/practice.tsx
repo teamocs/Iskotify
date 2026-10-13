@@ -4,7 +4,7 @@ import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
   Search1Outlined, Calculator1Outlined, Notebook1Outlined, ClipboardOutlined,
-  FileQuestionOutlined, Books2Outlined,
+  FileQuestionOutlined, Books2Outlined, Book1Outlined,
 } from '@lineiconshq/free-icons'
 import { TabHeader } from '../../components/TabHeader'
 import { usePracticeData, type TopicRow } from '../../hooks/usePracticeData'
@@ -28,13 +28,15 @@ import { getUpcatSubtestAccuracy, hasTakenDiagnostic, hasReviewContent, type Sub
 import { SUBTESTS } from '../../utils/upcatExam'
 import { countOpenMistakes } from '../../services/questionHistory'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
 import { SectionHeader } from '../../components/ui/SectionHeader'
-import { InsetGroup } from '../../components/ui/InsetGroup'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
 import { ListRow } from '../../components/ui/ListRow'
-import { StatNumber } from '../../components/ui/StatNumber'
+import { ProgressBar } from '../../components/ui/ProgressBar'
+import { Text as RoleText } from '../../components/ui/Text'
+import { ExamChips, MockHeroCard } from '../../components/practice/PracticeHero'
 import { Badge } from '../../components/ui/Badge'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -78,15 +80,6 @@ function RowGroup({ children }: { children: React.ReactNode }) {
   return <InsetGroup inset={false}>{children}</InsetGroup>
 }
 
-function RowIcon({ icon }: { icon: Parameters<typeof Lineicons>[0]['icon'] }) {
-  const { theme: t } = useTheme()
-  return (
-    <View style={{ width: 36, height: 36, borderRadius: radius.md, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
-      <Lineicons icon={icon} size={18} color={t.accentText} />
-    </View>
-  )
-}
-
 function SkeletonRows({ label, count = 3 }: { label: string; count?: number }) {
   return (
     <View accessible accessibilityLabel={label} aria-busy style={{ gap: spacing.sm }}>
@@ -108,6 +101,8 @@ export default function PracticeScreen() {
   const [deckOpen, setDeckOpen] = useState(false)
   const [subtestOpen, setSubtestOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  // The exam chip picked for the mock hero (null: the focus exam's mock, else the first).
+  const [selectedExam, setSelectedExam] = useState<string | null>(null)
 
   // ── Data ─────────────────────────────────────────────────────────────────
   // Each section owns its load state so one failure never blanks the page.
@@ -437,6 +432,7 @@ export default function PracticeScreen() {
           title="No subjects on this device yet"
           body="Choose an exam in Explore and its subjects download here for offline practice."
           actionLabel="Choose an exam"
+          actionVariant="secondary"
           onAction={() => go('/(tabs)/explore')}
         />
       ) : (
@@ -444,12 +440,19 @@ export default function PracticeScreen() {
           {subjectRows.map(s => {
             const topics = `${s.topics} topic${s.topics === 1 ? '' : 's'}`
             return (
-              <ListRow
+              // P4: icon tile · title over a thin 4pt mastery bar · tabular percent.
+              <InsetRow
                 key={s.id}
+                icon={Book1Outlined}
                 title={s.name}
                 subtitle={topics}
                 accessibilityLabel={`${s.name}, ${topics}, ${s.pct == null ? 'not practised yet' : `ready ${s.pct}%`}`}
-                trailing={<StatNumber value={s.pct == null ? '–' : `${s.pct}%`} label={s.pct == null ? 'New' : 'Ready'} />}
+                below={s.pct == null ? undefined : <ProgressBar value={s.pct / 100} label={`${s.name} readiness`} height={4} />}
+                trailing={(
+                  <RoleText role="headline" color={t.textSecondary} style={{ fontVariant: ['tabular-nums'] }} maxFontSizeMultiplier={1.6}>
+                    {s.pct == null ? 'New' : `${s.pct}%`}
+                  </RoleText>
+                )}
                 onPress={() => go(`/subjects/${s.id}`)}
               />
             )
@@ -463,7 +466,7 @@ export default function PracticeScreen() {
     <View testID="practice-decks">
       <SectionHeader title="Your decks" actionLabel="New deck" onAction={() => setDeckOpen(true)} />
       {decks.length === 0 ? (
-        <Text style={[textStyle('bodySm', t.textSecondary), { paddingVertical: spacing.sm }]} maxFontSizeMultiplier={1.8}>
+        <Text style={[iosTextStyle('footnote', t.textSecondary), { paddingVertical: spacing.sm }]} maxFontSizeMultiplier={1.8}>
           Bundle topics into a deck to review them together. Tap New deck to make one.
         </Text>
       ) : (
@@ -491,16 +494,16 @@ export default function PracticeScreen() {
       <SectionHeader title="Tools" />
       <RowGroup>
         {showEstimator ? (
-          <ListRow
-            leading={<RowIcon icon={Calculator1Outlined} />}
+          <InsetRow
+            icon={Calculator1Outlined}
             title="Estimated Admission Score"
             subtitle="An estimate based on historical cutoffs"
             onPress={() => go('/estimator')}
           />
         ) : null}
-        <ListRow leading={<RowIcon icon={Notebook1Outlined} />} title="Notes" subtitle="Your study notes and reminders" onPress={() => go('/notes')} />
-        <ListRow
-          leading={<RowIcon icon={ClipboardOutlined} />}
+        <InsetRow icon={Notebook1Outlined} title="Notes" subtitle="Your study notes and reminders" onPress={() => go('/notes')} />
+        <InsetRow
+          icon={ClipboardOutlined}
           title="Requirements"
           subtitle="Documents for your focus exams and scholarships"
           onPress={() => go('/requirements')}
@@ -526,10 +529,35 @@ export default function PracticeScreen() {
     </Pressable>
   )
 
+  // iOS redesign P4: exam chips, then the full mock hero (the tab's ONE
+  // primary action), the ways to practise, and the next step (tinted while
+  // the hero shows). Only real figures: the blueprint's and the saved run's.
+  const heroBlueprint = orderedBlueprints.find(b => b.slug === selectedExam)
+    ?? focusBlueprint ?? orderedBlueprints[0] ?? null
+  const heroRun = heroBlueprint ? inProgress?.get(heroBlueprint.slug) ?? null : null
+  const hero = heroBlueprint ? (
+    <View style={{ gap: spacing.md }}>
+      <ExamChips
+        chips={orderedBlueprints.map(b => ({ slug: b.slug, label: b.acronym }))}
+        selected={heroBlueprint.slug}
+        onSelect={setSelectedExam}
+      />
+      <MockHeroCard
+        acronym={heroBlueprint.acronym}
+        name={heroBlueprint.name}
+        items={heroBlueprint.items}
+        minutesLabel={minutes(heroBlueprint.minutes)}
+        inProgress={heroRun ? { answered: heroRun.answered, total: heroRun.total } : null}
+        onBegin={() => go(`/practice/exam/${heroBlueprint.slug}`)}
+      />
+    </View>
+  ) : null
+
   const primary = (
     <View style={{ gap: spacing.xxl }}>
+      {hero}
       <QuickStartRow tiles={quickTiles} onPress={openQuickTile} />
-      <NextStepCard copy={nextCopy} onAction={go} />
+      <NextStepCard copy={nextCopy} onAction={go} primary={!hero} />
       {mocksSection}
       {subjectsSection}
     </View>

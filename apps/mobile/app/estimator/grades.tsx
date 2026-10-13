@@ -4,7 +4,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../theme/tokens'
+import { spacing, radius, iosTextStyle, weight } from '../../theme/tokens'
 import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
@@ -229,7 +229,7 @@ export default function EstimatorGradesScreen() {
   ]
 
   const sectionHead = (title: string) => (
-    <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginTop: spacing.xxl, marginBottom: spacing.md }]} maxFontSizeMultiplier={2}>
+    <Text {...heading(2)} style={[iosTextStyle('headline', t.textPrimary), { marginTop: spacing.xxl, marginBottom: spacing.md }]} maxFontSizeMultiplier={2}>
       {title}
     </Text>
   )
@@ -244,7 +244,7 @@ export default function EstimatorGradesScreen() {
         <SensitiveConsentToggle value={false} onChange={v => void optIn(v)} />
       ) : null}
       {consentError ? (
-        <Text accessibilityRole="alert" style={[textStyle('bodySm', t.dangerStrong), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>{consentError}</Text>
+        <Text accessibilityRole="alert" style={[iosTextStyle('footnote', t.dangerStrong), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>{consentError}</Text>
       ) : null}
       {consented ? (
       <View style={{ gap: spacing.lg }}>
@@ -260,7 +260,7 @@ export default function EstimatorGradesScreen() {
               error={f.error ?? undefined}
             />
             {f.warning ? (
-              <Text style={textStyle('bodySm', t.warningStrong)} maxFontSizeMultiplier={2}>{f.warning}</Text>
+              <Text style={iosTextStyle('footnote', t.warningStrong)} maxFontSizeMultiplier={2}>{f.warning}</Text>
             ) : null}
           </View>
         ))}
@@ -284,10 +284,10 @@ export default function EstimatorGradesScreen() {
       {consented ? (
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
+          <Text style={iosTextStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
             I am a member of an Indigenous People
           </Text>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+          <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
             For the EEAS palugit (bonus points)
           </Text>
         </View>
@@ -336,7 +336,7 @@ export default function EstimatorGradesScreen() {
                   backgroundColor: t.surface,
                 }}
               />
-              <Text style={[textStyle(active ? 'titleSm' : 'body', active ? t.accentText : t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>
+              <Text style={[iosTextStyle(active ? 'headline' : 'body', active ? t.accentText : t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>
                 {campus}
               </Text>
             </Pressable>
@@ -361,7 +361,7 @@ export default function EstimatorGradesScreen() {
 
   const summary = (
     <Card style={{ gap: spacing.md }}>
-      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>Your entries</Text>
+      <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>Your entries</Text>
       <View>
         {summaryRows.map(([k, v], idx) => (
           <View
@@ -373,9 +373,9 @@ export default function EstimatorGradesScreen() {
               borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
             }}
           >
-            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{k}</Text>
+            <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>{k}</Text>
             <Text
-              style={[textStyle('label', t.textPrimary), { fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' }]}
+              style={[{ ...iosTextStyle('footnote', t.textPrimary), ...weight('600') }, { fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' }]}
               maxFontSizeMultiplier={2}
             >
               {v}
@@ -383,7 +383,7 @@ export default function EstimatorGradesScreen() {
           </View>
         ))}
       </View>
-      <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
+      <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
         Saved on this device. They feed your Estimated Admission Score, based on historical cutoffs.
       </Text>
       {save}

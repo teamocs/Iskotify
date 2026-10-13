@@ -94,7 +94,7 @@ jest.mock('../../../../hooks/useDb', () => {
 /** Fix 2: the last question opens a review sheet instead of submitting
  *  directly — drives that flow through to an actual submit() call. */
 async function reviewAndConfirmSubmit(alertSpy: jest.SpyInstance) {
-  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(screen.getByText('Review'))
   fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
   const buttons = call[2] as { text: string; onPress?: () => void }[]
@@ -148,7 +148,7 @@ describe('DiagnosticExam', () => {
     render(<DiagnosticExam />)
     await waitFor(() => expect(screen.getByText('If 2x + 5 = 13, what is the value of x?')).toBeTruthy())
     // Skip to the last bundled question, answer nothing else, and submit.
-    for (let i = 0; i < 20 && !screen.queryByText('Review & submit'); i++) fireEvent.press(screen.getByText('Skip'))
+    for (let i = 0; i < 20 && !screen.queryByText('Review'); i++) fireEvent.press(screen.queryByText('Skip') ?? screen.getByText('Next'))
     await reviewAndConfirmSubmit(alertSpy)
     await waitFor(() => expect(mockRecordSession).toHaveBeenCalledTimes(1))
     expect(mockRecordAttempts).not.toHaveBeenCalled()
@@ -312,7 +312,7 @@ describe('DiagnosticExam', () => {
 
     expect(screen.queryByText('Submit')).toBeNull()
     expect(screen.queryByText('Finish')).toBeNull()
-    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(screen.getByText('Review'))
 
     expect(mockRecordAttempts).not.toHaveBeenCalled()
     expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
@@ -431,7 +431,7 @@ describe('DiagnosticExam', () => {
     await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
     fireEvent.press(screen.getByText('a'))
 
-    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(screen.getByText('Review'))
     fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
     const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
     const buttons = call[2] as { text: string; onPress?: () => void }[]
@@ -587,7 +587,8 @@ describe('DiagnosticExam', () => {
       expect(within(col).getAllByRole('radio')).toHaveLength(4)
       const footer = screen.getByTestId('runner-footer')
       expect(flat(footer).maxWidth).toBeLessThanOrEqual(720)
-      expect(within(footer).getByRole('button', { name: 'Next' })).toBeTruthy()
+      // P4: the primary reads Skip until the question is answered.
+      expect(within(footer).getByRole('button', { name: 'Skip' })).toBeTruthy()
     })
 
     it('shows results on a titled page', async () => {
@@ -646,7 +647,8 @@ describe('DiagnosticExam', () => {
       fireEvent.press(screen.getByText('Submit what I answered'))
       await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
       expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ subtest: 'Science', score: 1, total: 1 }))
-      expect(screen.getByText('1/1 correct · 100%')).toBeTruthy()
+      expect(screen.getByText('1 of 1 correct')).toBeTruthy()
+      expect(screen.getByLabelText('Science, 1 of 1 correct, 100%')).toBeTruthy()
       expect(screen.getByText(/Questions you never reached are not counted/)).toBeTruthy()
     })
 
@@ -679,7 +681,7 @@ describe('DiagnosticExam', () => {
       render(<DiagnosticExam />)
       await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
       fireEvent.press(screen.getByText('Resume where you left off'))
-      await waitFor(() => expect(screen.getByText('Review & submit')).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('Review')).toBeTruthy())
       await reviewAndConfirmSubmit(alertSpy)
       await waitFor(() => expect(mockRecordAttempts).toHaveBeenCalled())
       expect(mockRecordAttempts.mock.calls[0]![0][0].sessionKey).toBe(777000)
@@ -718,7 +720,7 @@ describe('DiagnosticExam', () => {
       mockSources = { acet: acetSource() }
     }
     async function skipToLastAndSubmit() {
-      for (let i = 0; i < 40 && !screen.queryByText('Review & submit'); i++) fireEvent.press(screen.getByText('Skip'))
+      for (let i = 0; i < 40 && !screen.queryByText('Review'); i++) fireEvent.press(screen.queryByText('Skip') ?? screen.getByText('Next'))
       await reviewAndConfirmSubmit(alertSpy)
     }
 
@@ -768,7 +770,7 @@ describe('DiagnosticExam', () => {
       expect(await screen.findByText('ACET diagnostic results')).toBeTruthy()
       expect(screen.queryByText('Diagnostic results')).toBeNull()
       expect(screen.getAllByText(LANG).length).toBeGreaterThan(0)
-      expect(screen.getByText('Per-section readiness')).toBeTruthy()
+      expect(screen.getByRole('header', { name: 'By skill' })).toBeTruthy()
       expect(screen.getByText(/Not available yet: Abstract Thinking/)).toBeTruthy()
 
     })
@@ -845,7 +847,7 @@ describe('DiagnosticExam', () => {
       const view = render(<DiagnosticExam />)
       await waitFor(() => expect(screen.getByText('Question 1 of 10')).toBeTruthy())
       fireEvent.press(screen.getByText('a'))
-      fireEvent.press(screen.getByText('Skip'))
+      fireEvent.press(screen.queryByText('Skip') ?? screen.getByText('Next'))
       mockSearchParams = { subject: 'Science' }
       mockBankRows = [
         { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },

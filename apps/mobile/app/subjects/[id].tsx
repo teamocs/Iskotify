@@ -19,7 +19,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { decorative, focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
-import { spacing, radius, textStyle } from '../../theme/tokens'
+import { spacing, radius, iosTextStyle } from '../../theme/tokens'
 import { cachedQuery, invalidate } from '../../services/queryCache'
 import { getSubjectRecentAccuracy, getTopicRecentAccuracy } from '../../services/homeAggregates'
 import { topicReadiness } from '../../utils/subjectReadiness'
@@ -91,14 +91,14 @@ const TopicProgressRow = memo(function TopicProgressRow({ row }: { row: TopicRow
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text testID="topic-name" style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.8}>
+          <Text testID="topic-name" style={iosTextStyle('headline', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.8}>
             {row.name}
           </Text>
           {row.pct == null ? (
-            <Text style={textStyle('caption', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={1.8}>Not started</Text>
+            <Text style={iosTextStyle('caption', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={1.8}>Not started</Text>
           ) : null}
         </View>
-        <Text style={[textStyle('numeric', row.pct == null ? t.textSecondary : t.textPrimary)]} maxFontSizeMultiplier={1.4}>
+        <Text style={[iosTextStyle('numeric', row.pct == null ? t.textSecondary : t.textPrimary)]} maxFontSizeMultiplier={1.4}>
           {pctLabel}
         </Text>
         <View {...decorative} style={{ transform: [{ scaleX: -1 }] }}>
@@ -238,7 +238,7 @@ export default function SubjectDetailsScreen() {
 
   const summary = (
     <Card style={{ gap: spacing.lg }}>
-      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>
+      <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>
         Subject summary
       </Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xl }}>

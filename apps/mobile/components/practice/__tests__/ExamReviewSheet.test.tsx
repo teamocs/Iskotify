@@ -1,6 +1,6 @@
 import React from 'react'
-import { render, fireEvent, screen } from '@testing-library/react-native'
-import { Alert, AccessibilityInfo } from 'react-native'
+import { render, fireEvent, screen, act } from '@testing-library/react-native'
+import { Alert, AccessibilityInfo, Modal } from 'react-native'
 import { ExamReviewSheet } from '../ExamReviewSheet'
 import { aria } from '../../../test-utils/aria'
 
@@ -109,22 +109,28 @@ describe('ExamReviewSheet', () => {
     expect(screen.getAllByTestId('qgrid-answered-mark', { includeHiddenElements: true })).toHaveLength(2)
   })
 
-  // Review finding #4 (MEDIUM): the sheet is a full-screen modal — it needs
-  // accessibilityViewIsModal (so screen readers don't escape into content
-  // behind it), an accessibilityRole="header" title, and initial focus moved
-  // onto that title when it opens.
-  describe('accessibility', () => {
+  // Review finding #4 (MEDIUM) + iOS redesign P4: the sheet is the P3 Sheet,
+  // so it is a modal view for assistive technology, the title is a header,
+  // native screen-reader focus moves to the title once it has slid in, and the
+  // web focus trap starts at Close with the summary next (never on a cell).
+  describe('accessibility (P3 Sheet contract)', () => {
     let focusSpy: jest.SpyInstance
+    let nodeSpy: jest.SpyInstance
 
     beforeEach(() => {
+      jest.useFakeTimers()
       focusSpy = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus').mockImplementation(() => {})
+      nodeSpy = jest.spyOn(require('react-native'), 'findNodeHandle').mockReturnValue(1)
     })
-    afterEach(() => focusSpy.mockRestore())
+    afterEach(() => {
+      focusSpy.mockRestore()
+      nodeSpy.mockRestore()
+      jest.useRealTimers()
+    })
 
     it('marks the sheet content as a modal view for assistive technology', () => {
       render(<ExamReviewSheet {...baseProps} />)
       const title = screen.getByText('Review your answers')
-      // Walk up from the title to find the ancestor flagged as the modal view.
       let node: any = title.parent
       let found = false
       while (node) {
@@ -139,79 +145,102 @@ describe('ExamReviewSheet', () => {
       expect(screen.getByText('Review your answers').props.accessibilityRole).toBe('header')
     })
 
-    it('moves accessibility focus onto the title when the sheet becomes visible', () => {
+    it('moves accessibility focus onto the title once the sheet is up', () => {
       render(<ExamReviewSheet {...baseProps} visible={true} />)
+      act(() => { jest.advanceTimersByTime(300) })
       expect(focusSpy).toHaveBeenCalledTimes(1)
-    })
-
-    // Regression (found in the M2 web visual check): react-native-web's
-    // findNodeHandle THROWS ("not supported on web"), which unmounted the whole
-    // app the moment "Review & submit" opened the sheet — a web student could
-    // never submit a mock. On web, RNW's Modal already moves focus in.
-    it('opens on web without calling findNodeHandle (it throws there)', () => {
-      const RN = require('react-native')
-      const restoreOS = jest.replaceProperty(RN.Platform, 'OS', 'web')
-      const fnh = jest.spyOn(RN, 'findNodeHandle').mockImplementation(() => {
-        throw new Error('findNodeHandle is not supported on web.')
-      })
-      try {
-        expect(() => render(<ExamReviewSheet {...baseProps} visible />)).not.toThrow()
-        expect(screen.getByText('Review your answers')).toBeTruthy()
-        expect(fnh).not.toHaveBeenCalled()
-      } finally {
-        fnh.mockRestore()
-        restoreOS.restore()
-      }
-    })
-
-    // Review finding (HIGH): on web, RNW's ModalFocusTrap focuses the first
-    // focusable descendant, which is a question cell, so a keyboard or screen
-    // reader user skipped the title and the unanswered summary. On web the
-    // title is made programmatically focusable and focused when the sheet opens.
-    describe('on web', () => {
-      const MockNativeMethods = require('react-native/jest/MockNativeMethods').default
-      let restoreOS: { restore: () => void }
-      beforeEach(() => {
-        restoreOS = jest.replaceProperty(require('react-native').Platform, 'OS', 'web')
-        MockNativeMethods.focus.mockClear()
-      })
-      afterEach(() => restoreOS.restore())
-
-      const titleFocusCalls = () =>
-        (MockNativeMethods.focus.mock.contexts as any[]).filter(c => c?.props?.children === 'Review your answers').length
-
-      it('makes the title programmatically focusable (tabIndex -1)', () => {
-        render(<ExamReviewSheet {...baseProps} visible />)
-        expect(screen.getByText('Review your answers').props.tabIndex).toBe(-1)
-      })
-
-      it('focuses the title when the sheet opens, and again on each reopen', () => {
-        const { rerender } = render(<ExamReviewSheet {...baseProps} visible={false} />)
-        expect(titleFocusCalls()).toBe(0)
-        rerender(<ExamReviewSheet {...baseProps} visible />)
-        expect(titleFocusCalls()).toBe(1)
-        rerender(<ExamReviewSheet {...baseProps} visible={false} />)
-        rerender(<ExamReviewSheet {...baseProps} visible />)
-        expect(titleFocusCalls()).toBe(2)
-        expect(focusSpy).not.toHaveBeenCalled()
-      })
-    })
-
-    it('leaves the native title out of the tab order (native focus is unchanged)', () => {
-      render(<ExamReviewSheet {...baseProps} visible />)
-      expect(screen.getByText('Review your answers').props.tabIndex).toBeUndefined()
     })
 
     it('does not steal focus while the sheet is closed', () => {
       render(<ExamReviewSheet {...baseProps} visible={false} />)
+      act(() => { jest.advanceTimersByTime(300) })
       expect(focusSpy).not.toHaveBeenCalled()
     })
 
     it('moves focus again each time the sheet reopens', () => {
       const { rerender } = render(<ExamReviewSheet {...baseProps} visible={false} />)
-      expect(focusSpy).not.toHaveBeenCalled()
       rerender(<ExamReviewSheet {...baseProps} visible={true} />)
+      act(() => { jest.advanceTimersByTime(300) })
       expect(focusSpy).toHaveBeenCalledTimes(1)
+      rerender(<ExamReviewSheet {...baseProps} visible={false} />)
+      act(() => { jest.advanceTimersByTime(300) })
+      rerender(<ExamReviewSheet {...baseProps} visible={true} />)
+      act(() => { jest.advanceTimersByTime(300) })
+      expect(focusSpy).toHaveBeenCalledTimes(2)
+    })
+
+    // Regression (M2 web visual check): react-native-web's findNodeHandle
+    // THROWS, which once unmounted the app when the sheet opened.
+    it('opens on web without calling findNodeHandle (it throws there)', () => {
+      const RN = require('react-native')
+      const restoreOS = jest.replaceProperty(RN.Platform, 'OS', 'web')
+      const fnh = nodeSpy.mockImplementation(() => {
+        throw new Error('findNodeHandle is not supported on web.')
+      })
+      try {
+        expect(() => render(<ExamReviewSheet {...baseProps} visible />)).not.toThrow()
+        act(() => { jest.advanceTimersByTime(300) })
+        expect(screen.getByText('Review your answers')).toBeTruthy()
+        expect(fnh).not.toHaveBeenCalled()
+      } finally {
+        restoreOS.restore()
+      }
+    })
+
+    // M5 (web): react-native-web's Modal traps focus and moves it to the first
+    // focusable descendant on open, then restores it to the opener when the
+    // Modal unmounts. The sheet's design is that this first stop is Close
+    // (inside the sheet, never a question cell behind it), with the summary
+    // next in reading order, and that the Modal really unmounts on close.
+    describe('on web', () => {
+      let restoreOS: { restore: () => void }
+      beforeEach(() => { restoreOS = jest.replaceProperty(require('react-native').Platform, 'OS', 'web') })
+      afterEach(() => restoreOS.restore())
+
+      const focusables = () => screen.UNSAFE_root.findAll((n: any) => typeof n.type === 'string'
+        && (n.props?.accessibilityRole === 'button' || n.props?.role === 'button')
+        && n.props?.tabIndex !== -1 && n.props?.focusable !== false)
+
+      it('focus lands inside the sheet on open, starting at Close (the backdrop is out of the tab order)', () => {
+        render(<ExamReviewSheet {...baseProps} visible />)
+        act(() => { jest.advanceTimersByTime(300) })
+        const first = focusables()[0]!
+        expect(first.props.accessibilityLabel).toBe('Close')
+        // Close sits inside the modal panel.
+        let n: any = first
+        let inPanel = false
+        for (; n; n = n.parent) if (n.props?.testID === 'sheet-panel') { inPanel = true; break }
+        expect(inPanel).toBe(true)
+        const backdrop = screen.getByTestId('sheet-backdrop', { includeHiddenElements: true })
+        expect(backdrop.props.tabIndex ?? -1).toBe(-1)
+        // The dialog is named by its title.
+        const modal = screen.UNSAFE_getByType(Modal)
+        const titleId = modal.props['aria-labelledby']
+        expect(screen.getByText('Review your answers').props.nativeID).toBe(titleId)
+      })
+
+      it('unmounts the Modal after closing, so react-native-web returns focus to the opener', () => {
+        const { rerender } = render(<ExamReviewSheet {...baseProps} visible />)
+        act(() => { jest.advanceTimersByTime(300) })
+        expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true)
+        rerender(<ExamReviewSheet {...baseProps} visible={false} />)
+        act(() => { jest.advanceTimersByTime(300) }) // the 220ms exit
+        expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(false)
+        expect(screen.queryByText('Review your answers')).toBeNull()
+      })
+    })
+
+    it('puts Close first and the unanswered summary before any question cell (reading order)', () => {
+      render(<ExamReviewSheet {...baseProps} />)
+      const nodes = screen.UNSAFE_root.findAll((n: any) => typeof n.type === 'string'
+        && (n.props?.accessibilityRole === 'button' || n.props?.children === '2 unanswered.'))
+      const labels = nodes.map((n: any) => n.props.accessibilityLabel ?? n.props.children)
+      const close = labels.indexOf('Close')
+      const summary = labels.indexOf('2 unanswered.')
+      const firstCell = labels.findIndex((l: any) => typeof l === 'string' && l.startsWith('Question 1'))
+      expect(close).toBeGreaterThanOrEqual(0)
+      expect(close).toBeLessThan(summary)
+      expect(summary).toBeLessThan(firstCell)
     })
   })
 

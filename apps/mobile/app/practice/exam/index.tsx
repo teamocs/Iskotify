@@ -16,7 +16,7 @@ import { EmptyState } from '../../../components/ui/EmptyState'
 import { ErrorState } from '../../../components/ui/ErrorState'
 import { focusRing, type WebPressableState } from '../../../components/ui/a11y'
 import { useTheme } from '../../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../../../theme/tokens'
 
 type Row = { bp: ExamBlueprint; best: number | null; ready: boolean; items: number; coverage: MockCoverage }
 type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: Row[] }
@@ -96,8 +96,8 @@ export default function ExamPicker() {
     <Screen header={<View style={{ paddingTop: spacing.sm }}>{back}</View>}>
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
         <View style={{ gap: spacing.xs }}>
-          <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>Mock exams</Text>
-          <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.8}>
+          <Text accessibilityRole="header" style={iosTextStyle('title1', t.textPrimary)} maxFontSizeMultiplier={1.4}>Mock exams</Text>
+          <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.8}>
             Full-length, timed practice. Each one also has a 30-minute Study Sprint.
           </Text>
         </View>
