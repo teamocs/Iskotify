@@ -1,3 +1,6 @@
+// This file tests the real store: opt out of the static mock in jest.setup.ts.
+jest.unmock('../usePlatformCapabilities')
+
 import React from 'react'
 import { AccessibilityInfo } from 'react-native'
 import { renderHook, act, waitFor } from '@testing-library/react-native'

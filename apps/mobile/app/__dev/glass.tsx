@@ -49,7 +49,7 @@ function TierStage({ tier, label, drawn }: { tier: BlurTier; label: string; draw
   const { theme: t } = useTheme()
   const target = useRef<View>(null)
   const s = useMemo(() => StyleSheet.create({
-    stage: { height: 120, borderRadius: radius.card, borderCurve: 'continuous', overflow: 'hidden', marginBottom: spacing.lg, backgroundColor: t.surface },
+    stage: { minHeight: 120, borderRadius: radius.card, borderCurve: 'continuous', overflow: 'hidden', marginBottom: spacing.lg, backgroundColor: t.surface },
     stripes: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
     stripe: { flex: 1 },
     capsule: {

@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from './a11y'
 
 /** Static tag. Not a control — use FilterChip for anything tappable. */
@@ -23,7 +23,7 @@ export function Chip({ label, leading }: { label: string; leading?: React.ReactN
       }}
     >
       {leading}
-      <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={2}>{label}</Text>
+      <Text style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={2}>{label}</Text>
     </View>
   )
 }
@@ -79,7 +79,7 @@ export function FilterChip({ label, selected, onPress, mode = 'single', role, ac
             gap: spacing.xs,
             minHeight: 44,
             paddingHorizontal: spacing.lg,
-            borderRadius: radius.pill,
+            borderRadius: radius.capsule,
             borderWidth: 1,
             borderColor: selected ? t.accentBorder : t.border,
             backgroundColor: selected ? t.accentSurface : pressed ? t.surface2 : t.surface,
@@ -94,7 +94,7 @@ export function FilterChip({ label, selected, onPress, mode = 'single', role, ac
         </View>
       ) : null}
       <Text
-        style={[textStyle('label', fg), weight(selected ? '600' : '500')]}
+        style={[{ ...iosTextStyle('footnote', fg), ...weight('600') }, weight(selected ? '600' : '500')]}
         numberOfLines={1}
         maxFontSizeMultiplier={2}
       >

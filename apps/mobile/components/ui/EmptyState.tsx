@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { Button, type ButtonVariant } from './Button'
 import { decorative } from './a11y'
 
@@ -25,18 +25,18 @@ export function EmptyState({ icon, title, body, actionLabel, onAction, actionVar
         <View
           {...decorative}
           style={{
-            width: 56, height: 56, borderRadius: radius.pill, backgroundColor: t.surface2,
+            width: 56, height: 56, borderRadius: radius.capsule, backgroundColor: t.surface2,
             alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs,
           }}
         >
           {icon}
         </View>
       ) : null}
-      <Text accessibilityRole="header" style={[textStyle('headline', t.textPrimary), { textAlign: 'center' }]}>
+      <Text accessibilityRole="header" style={[iosTextStyle('title3', t.textPrimary), { textAlign: 'center' }]}>
         {title}
       </Text>
       {body ? (
-        <Text style={[textStyle('body', t.textSecondary), { textAlign: 'center', maxWidth: 420 }]}>{body}</Text>
+        <Text style={[iosTextStyle('body', t.textSecondary), { textAlign: 'center', maxWidth: 420 }]}>{body}</Text>
       ) : null}
       {actionLabel && onAction ? (
         <View style={{ marginTop: spacing.sm }}>

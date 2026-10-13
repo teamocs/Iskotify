@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useDb } from '../hooks/useDb'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, textStyle } from '../theme/tokens'
+import { spacing, iosTextStyle } from '../theme/tokens'
 import { useBreakpoint, pagePadding } from '../hooks/useBreakpoint'
 import { Button } from '../components/ui/Button'
 import { heading } from '../components/ui/a11y'
@@ -57,10 +57,10 @@ export default function ConsentUpdateScreen() {
           }}
         >
           <View style={{ gap: spacing.sm }}>
-            <Text {...heading(1)} style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+            <Text {...heading(1)} style={iosTextStyle('largeTitle', t.textPrimary)} maxFontSizeMultiplier={1.6}>
               We&apos;ve updated our Terms and Privacy Policy
             </Text>
-            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+            <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
               Please take a moment to read them, then tell us you agree to keep using Iskotify.
             </Text>
           </View>
@@ -71,14 +71,14 @@ export default function ConsentUpdateScreen() {
             {reason ? (
               <Text
                 accessibilityLiveRegion="polite"
-                style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]}
+                style={[iosTextStyle('footnote', t.textSecondary), { textAlign: 'center' }]}
                 maxFontSizeMultiplier={2}
               >
                 {reason}
               </Text>
             ) : null}
             {error ? (
-              <Text accessibilityRole="alert" style={[textStyle('bodySm', t.danger), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+              <Text accessibilityRole="alert" style={[iosTextStyle('footnote', t.danger), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
                 {error}
               </Text>
             ) : null}
@@ -90,7 +90,7 @@ export default function ConsentUpdateScreen() {
               loading={saving}
               onPress={() => void agree()}
             />
-            <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+            <Text style={[iosTextStyle('caption', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
               {"If you don't agree, you can close the app. Iskotify can't be used without agreeing."}
             </Text>
           </View>

@@ -174,7 +174,9 @@ export function CheckCircle({ done }: { done: boolean }) {
       return
     }
     fill.value = 1
-    scale.value = withSequence(withTiming(0.6, { duration: 0 }), withSpring(1, motion.spring.bouncy))
+    // A quiet settle, no pop (owner feedback 2026-10-13): bouncy is only for
+    // the correct-answer check.
+    scale.value = withSequence(withTiming(0.85, { duration: 0 }), withSpring(1, motion.spring.snappy))
     // Shared values are stable; listing them would re-run this on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done, reduceMotion])

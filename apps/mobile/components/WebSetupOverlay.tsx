@@ -16,18 +16,15 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import {
-  Platform,
-  View,
-  Image,
-  ActivityIndicator,
-  Text,
-  Pressable,
-  StyleSheet,
-} from 'react-native'
+// RN Image is fine for the tiny bundled app icon.
+// react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
+import { Platform, View, Image, ActivityIndicator, StyleSheet } from 'react-native'
 import { useSyncStatus } from '../hooks/useSyncStatus'
 import { markSyncDone } from '../services/syncStatus'
 import { useTheme } from '../theme/ThemeContext'
+import { radius, spacing } from '../theme/tokens'
+import { Button } from './ui/Button'
+import { Text } from './ui/Text'
 
 const SAFETY_TIMEOUT_MS = 15_000
 
@@ -36,7 +33,7 @@ export function WebSetupOverlay() {
   // this is harmless: useSyncStatus reads a module-level store and useTheme reads
   // context, and the Platform + visibility guards return null so nothing renders.
   const status = useSyncStatus()
-  const { theme, typo } = useTheme()
+  const { theme } = useTheme()
 
   const isVisible = status.isSyncing && !status.firstSyncDone
 
@@ -56,59 +53,37 @@ export function WebSetupOverlay() {
   if (Platform.OS !== 'web') return null
   if (!isVisible) return null
 
+  // A full-screen page (not glass): nothing usable sits behind it yet.
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+    <View style={[StyleSheet.absoluteFill, styles.container, { backgroundColor: theme.bg }]}>
       <Image
         source={require('../assets/images/icon.png')}
         style={styles.icon}
         accessibilityIgnoresInvertColors
       />
 
-      <ActivityIndicator
-        size="large"
-        color={theme.accentText}
-        style={styles.spinner}
-      />
+      <ActivityIndicator size="large" color={theme.accentText} />
 
-      <Text
-        style={[styles.title, { fontSize: typo.lg, color: theme.textPrimary }]}
-        maxFontSizeMultiplier={1.4}
-      >
-        Setting up Iskotify
-      </Text>
-
-      <Text
-        style={[styles.subtitle, { fontSize: typo.sm, color: theme.textSecondary }]}
-        maxFontSizeMultiplier={1.4}
-      >
-        Fetching the latest exams, scholarships and study decks. This only happens once on a new device.
-      </Text>
+      <View style={styles.words}>
+        <Text role="title2" accessibilityRole="header" style={styles.center} maxFontSizeMultiplier={1.4}>
+          Setting up Iskotify
+        </Text>
+        <Text role="subheadline" color={theme.textSecondary} style={styles.center} maxFontSizeMultiplier={1.4}>
+          Fetching the latest exams, scholarships and study decks. This only happens once on a new device.
+        </Text>
+      </View>
 
       {showContinue ? (
         <View style={styles.continueBlock}>
-          <Text
-            style={[styles.slowText, { fontSize: typo.xs, color: theme.textTertiary }]}
-            maxFontSizeMultiplier={1.4}
-          >
+          <Text role="footnote" color={theme.textSecondary} style={styles.center} maxFontSizeMultiplier={1.4}>
             Taking longer than usual…
           </Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.continueBtn,
-              { borderColor: theme.inputBorder, backgroundColor: theme.surface },
-              pressed && styles.continueBtnPressed,
-            ]}
+          <Button
+            label="Continue anyway"
+            variant="secondary"
             onPress={() => markSyncDone()}
-            accessibilityRole="button"
             accessibilityLabel="Continue to the app without waiting for the sync to finish"
-          >
-            <Text
-              style={[styles.continueBtnText, { fontSize: typo.sm, color: theme.textPrimary }]}
-              maxFontSizeMultiplier={1.4}
-            >
-              Continue anyway
-            </Text>
-          </Pressable>
+          />
         </View>
       ) : null}
     </View>
@@ -117,51 +92,29 @@ export function WebSetupOverlay() {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xl,
     zIndex: 9999,
     elevation: 9999,
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xxxl,
   },
   icon: {
     width: 80,
     height: 80,
-    borderRadius: 20,
-    marginBottom: 20,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
   },
-  spinner: {
-    marginBottom: 20,
+  words: {
+    gap: spacing.md,
+    maxWidth: 360,
   },
-  title: {
-    fontWeight: '700',
+  center: {
     textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitle: {
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 320,
   },
   continueBlock: {
-    marginTop: 28,
+    marginTop: spacing.sm,
     alignItems: 'center',
-    gap: 12,
-  },
-  slowText: {
-    textAlign: 'center',
-  },
-  continueBtn: {
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 9,
-  },
-  continueBtnPressed: {
-    opacity: 0.6,
-  },
-  continueBtnText: {
-    fontWeight: '600',
-    textAlign: 'center',
+    gap: spacing.md,
   },
 })

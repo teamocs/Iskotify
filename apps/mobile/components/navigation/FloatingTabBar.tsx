@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, TextInput, Platform, type LayoutChangeEvent, type ViewStyle } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { KeyboardStickyView } from 'react-native-keyboard-controller'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { XmarkOutlined } from '@lineiconshq/free-icons'
@@ -8,7 +8,7 @@ import { XmarkOutlined } from '@lineiconshq/free-icons'
 // react-doctor-disable-next-line react-doctor/rn-no-non-native-navigator
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../../theme/ThemeContext'
-import { layout, motion, radius, spacing, textStyle, weight } from '../../theme/tokens'
+import { layout, motion, radius, spacing, weight, iosTextStyle } from '../../theme/tokens'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { selection } from '../../lib/haptics'
@@ -29,9 +29,11 @@ import {
 //   minimized  ( active )                           ( search )   scrolled down
 //   search     ( back to tab )  [ search field ...............]   on Search
 //
-// The capsule and the search control morph by width on spring.smooth; the
-// selection lens slides on spring.bouncy. Reduce Motion: the lens jumps and
-// the morphs become a 160ms crossfade.
+// The capsule and the search control morph by width over a 260ms ease-out
+// (motion.duration.bar) while the row crossfades in 140ms; the selection lens
+// slides on spring.snappy, with no sideways overshoot (owner feedback,
+// 2026-10-13). Reduce Motion: the lens jumps and the morphs become a 120ms
+// crossfade.
 // ---------------------------------------------------------------------------
 
 const BAR = layout.tabCapsule.height          // 62
@@ -131,7 +133,7 @@ function TabItem({ dest, isFocused, onPress }: {
         <Lineicons icon={dest.icon} size={22} color={color} />
       </View>
       <Text
-        style={[textStyle('caption', color), weight(isFocused ? '600' : '500')]}
+        style={[iosTextStyle('caption', color), weight(isFocused ? '600' : '500')]}
         numberOfLines={1}
         maxFontSizeMultiplier={LABEL_SCALE}
       >
@@ -191,7 +193,7 @@ function BarSearchField() {
         autoCapitalize="none"
         maxFontSizeMultiplier={LABEL_SCALE}
         style={[
-          textStyle('body', t.textPrimary),
+          iosTextStyle('body', t.textPrimary),
           { flex: 1, minHeight: 44, paddingHorizontal: spacing.sm },
           Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null,
         ]}
@@ -204,7 +206,7 @@ function BarSearchField() {
           style={(state) => {
             const { pressed, focused } = state as WebPressableState
             return [
-              { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 },
+              { width: 44, height: 44, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 },
               insetRing(t.focusRing, focused),
             ]
           }}
@@ -279,17 +281,25 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     const w = barWidths(mode, rowWidth)
     const modeChanged = shownMode.current !== null && shownMode.current !== mode
     shownMode.current = mode
+    if (modeChanged) {
+      // Restart the crossfade only once the last one has finished: rapid taps
+      // retarget a running fade instead of blinking the row back to 0.
+      if (fade.value >= 1) fade.value = 0
+      fade.value = withTiming(1, { duration: reduceMotion ? motion.duration.reduced : motion.duration.fade })
+    }
     if (reduceMotion) {
       capsuleW.value = w.capsule
       searchW.value = w.search
-      if (modeChanged) {
-        fade.value = 0
-        fade.value = withTiming(1, { duration: motion.duration.reduced })
-      }
       return
     }
-    capsuleW.value = withSpring(w.capsule, motion.spring.smooth)
-    searchW.value = withSpring(w.search, motion.spring.smooth)
+    // 260ms for the whole morph, less for what is left of an interrupted one.
+    const span = Math.max(1, barWidths('tabs', rowWidth).capsule - CIRCLE)
+    const morphFor = (from: number, to: number) => ({
+      duration: Math.max(motion.duration.reduced, Math.round(motion.duration.bar * Math.min(1, Math.abs(to - from) / span))),
+      easing: Easing.out(Easing.cubic),
+    })
+    capsuleW.value = withTiming(w.capsule, morphFor(capsuleW.value, w.capsule))
+    searchW.value = withTiming(w.search, morphFor(searchW.value, w.search))
   }, [mode, rowWidth, reduceMotion, capsuleW, searchW, fade])
 
   // Until the row is measured the capsule just fills it (no animated width,
@@ -319,7 +329,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
       lensPlaced.current = true
       return
     }
-    lensIndex.value = withSpring(focusedIndex, motion.spring.bouncy)
+    lensIndex.value = withSpring(focusedIndex, motion.spring.snappy)
   }, [focusedIndex, reduceMotion, lensIndex])
 
   const lensStyle = useAnimatedStyle(() => {

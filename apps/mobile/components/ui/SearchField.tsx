@@ -3,7 +3,7 @@ import { View, TextInput, Pressable, ActivityIndicator, Platform } from 'react-n
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Search1Outlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle, weight } from '../../theme/tokens'
+import { radius, spacing, weight, iosTextStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from './a11y'
 import { Text } from './Text'
 
@@ -74,7 +74,7 @@ export function SearchField({
         autoCapitalize="none"
         maxFontSizeMultiplier={1.6}
         style={[
-          textStyle('body', t.textPrimary),
+          iosTextStyle('body', t.textPrimary),
           { flex: 1, minHeight: 44, paddingVertical: spacing.sm },
           // The container draws the focus state; drop the browser's own outline.
           Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null,

@@ -33,9 +33,9 @@ export function SessionLoading({ label, fallbackHref = '/practice' }: { label: s
         <Skeleton width="60%" height={30} />
         <Skeleton width="40%" height={18} />
         <View style={{ height: spacing.md }} />
-        <Skeleton height={160} radius={radius.xl} />
-        <Skeleton height={64} radius={radius.lg} />
-        <Skeleton height={64} radius={radius.lg} />
+        <Skeleton height={160} radius={radius.card} />
+        <Skeleton height={64} radius={radius.group} />
+        <Skeleton height={64} radius={radius.group} />
       </View>
     </Frame>
   )

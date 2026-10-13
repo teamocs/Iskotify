@@ -150,8 +150,8 @@ export default function RequirementsScreen() {
       />
       {loading ? (
         <View testID="requirements-skeleton" accessible accessibilityLabel="Loading requirements" aria-busy style={{ gap: spacing.lg }}>
-          <Skeleton height={160} radius={radius.xl} />
-          <Skeleton height={160} radius={radius.xl} />
+          <Skeleton height={160} radius={radius.card} />
+          <Skeleton height={160} radius={radius.card} />
         </View>
       ) : sections.length > 0 ? (
         <View

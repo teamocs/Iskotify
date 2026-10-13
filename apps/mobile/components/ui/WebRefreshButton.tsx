@@ -2,7 +2,7 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { SyncOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from './a11y'
 
 interface WebRefreshButtonProps {
@@ -43,7 +43,7 @@ function WebRefreshButtonInner({ onRefresh, refreshing, iconOnly = false }: WebR
             justifyContent: 'center',
             gap: spacing.sm,
             ...(iconOnly ? null : { paddingHorizontal: spacing.md }),
-            borderRadius: radius.pill,
+            borderRadius: radius.capsule,
             borderWidth: 1,
             borderColor: t.border,
             backgroundColor: pressed || hovered ? t.surface2 : t.surface,
@@ -61,7 +61,7 @@ function WebRefreshButtonInner({ onRefresh, refreshing, iconOnly = false }: WebR
         </View>
       )}
       {iconOnly ? null : (
-        <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+        <Text style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={1.6}>
           {refreshing ? 'Refreshing' : 'Refresh'}
         </Text>
       )}

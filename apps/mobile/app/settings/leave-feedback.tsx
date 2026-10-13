@@ -47,7 +47,7 @@ export default function LeaveFeedbackScreen() {
     return (
       <InfoPage title="Leave feedback">
         <View style={{ gap: spacing.lg }}>
-          <StatusPanel tone="success" title="Salamat! We got your feedback.">
+          <StatusPanel tone="success" title="Thanks. We got your feedback.">
             <Text role="footnote" color={t.textSecondary}>It helps us make Iskotify better for every student.</Text>
           </StatusPanel>
           <Button label="Done" onPress={() => goBackOr('/settings')} size="lg" fullWidth />

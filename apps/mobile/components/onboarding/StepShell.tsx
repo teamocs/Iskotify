@@ -8,10 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined, CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { useBreakpoint, pagePadding } from '../../hooks/useBreakpoint'
 import { Button } from '../ui/Button'
 import { ProgressBar } from '../ui/ProgressBar'
+import { PageTransition } from '../ui/PageTransition'
 import { decorative, focusRing, heading, type WebPressableState } from '../ui/a11y'
 import { TAGLINE } from '../auth/BrandPanel'
 import { ONBOARDING_STEPS, stepPosition, type Section, type StepId } from './flow'
@@ -64,7 +65,7 @@ function SectionRail({ current }: { current: Section }) {
     <View
       testID="section-rail"
       style={{
-        width: 320, backgroundColor: t.surface, borderRadius: radius.xxl, borderCurve: 'continuous',
+        width: 320, backgroundColor: t.surface, borderRadius: radius.sheet, borderCurve: 'continuous',
         padding: spacing.xxl, justifyContent: 'space-between', gap: spacing.xxl,
         borderWidth: 1, borderColor: t.border,
       }}
@@ -77,11 +78,11 @@ function SectionRail({ current }: { current: Section }) {
             accessibilityIgnoresInvertColors
             accessible={false}
           />
-          <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.4}>Iskotify</Text>
+          <Text style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.4}>Iskotify</Text>
         </View>
         <View style={{ gap: spacing.xs }}>
-          <Text style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.4}>Let&apos;s set up your plan</Text>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+          <Text style={iosTextStyle('title3', t.textPrimary)} maxFontSizeMultiplier={1.4}>Let&apos;s set up your plan</Text>
+          <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.6}>
             Four short parts. Your answers save as you go.
           </Text>
         </View>
@@ -101,13 +102,13 @@ function SectionRail({ current }: { current: Section }) {
                 <View style={{ alignItems: 'center' }}>
                   <View
                     style={{
-                      width: 28, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+                      width: 28, height: 28, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center',
                       backgroundColor: isCurrent ? t.accent : done ? t.accentSurface : 'transparent',
                       borderWidth: isCurrent || done ? 0 : 1.5, borderColor: t.inputBorder,
                     }}
                   >
                     {done ? <Lineicons icon={CheckOutlined} size={14} color={t.accentText} /> : (
-                      <Text style={textStyle('label', isCurrent ? t.textInverse : t.textSecondary)} maxFontSizeMultiplier={1.2}>
+                      <Text style={{ ...iosTextStyle('footnote', isCurrent ? t.textInverse : t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={1.2}>
                         {String(i + 1)}
                       </Text>
                     )}
@@ -117,10 +118,10 @@ function SectionRail({ current }: { current: Section }) {
                   ) : null}
                 </View>
                 <View style={{ flex: 1, paddingTop: 4, paddingBottom: spacing.md }}>
-                  <Text style={textStyle(isCurrent ? 'titleSm' : 'label', isCurrent ? t.textPrimary : t.textSecondary)} maxFontSizeMultiplier={1.4}>
+                  <Text style={isCurrent ? iosTextStyle('headline', t.textPrimary) : { ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={1.4}>
                     {s.name}
                   </Text>
-                  <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>
+                  <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>
                     {s.hint}
                   </Text>
                 </View>
@@ -129,7 +130,7 @@ function SectionRail({ current }: { current: Section }) {
           })}
         </View>
       </View>
-      <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={1.4}>{TAGLINE}</Text>
+      <Text style={{ ...iosTextStyle('footnote', t.accentText), ...weight('600') }} maxFontSizeMultiplier={1.4}>{TAGLINE}</Text>
     </View>
   )
 }
@@ -155,6 +156,12 @@ export function StepShell({
   const gutter = wide ? spacing.xxxl : pagePadding(bp)
   const pos = stepPosition(step)
   const titleRef = useRef<Text>(null)
+  // A page is a step (or a question within the quick check, which changes the
+  // title): forward moves enter from the trailing edge, Back from the leading.
+  const page = `${step}:${title}`
+  const lastIndex = useRef(pos.index)
+  const direction: 1 | -1 = pos.index < lastIndex.current ? -1 : 1
+  useEffect(() => { lastIndex.current = pos.index }, [pos.index])
 
   useEffect(() => {
     if (Platform.OS === 'web') return
@@ -179,7 +186,7 @@ export function StepShell({
               style={(state) => {
                 const { pressed, hovered, focused } = state as WebPressableState
                 return [{
-                  width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+                  width: 44, height: 44, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center',
                   backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
                 }, focusRing(t.focusRing, focused)]
               }}
@@ -190,10 +197,10 @@ export function StepShell({
             </Pressable>
           ) : null}
           <View style={{ flex: 1, minWidth: 0, paddingHorizontal: onBack ? spacing.xs : 0 }}>
-            <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+            <Text style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={1.6}>
               {`Step ${pos.index} of ${pos.total}`}
             </Text>
-            <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{pos.section}</Text>
+            <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{pos.section}</Text>
           </View>
           {onSkip ? (
             <Pressable
@@ -203,32 +210,34 @@ export function StepShell({
               style={(state) => {
                 const { pressed, hovered, focused } = state as WebPressableState
                 return [{
-                  minHeight: 44, minWidth: 44, paddingHorizontal: spacing.md, borderRadius: radius.md,
+                  minHeight: 44, minWidth: 44, paddingHorizontal: spacing.md, borderRadius: radius.button,
                   alignItems: 'center', justifyContent: 'center',
                   backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
                 }, focusRing(t.focusRing, focused)]
               }}
             >
-              <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={1.6}>Skip</Text>
+              <Text style={[iosTextStyle('body', t.accentText), weight('600')]} maxFontSizeMultiplier={1.6}>Skip</Text>
             </Pressable>
           ) : null}
         </View>
         <View style={{ marginTop: spacing.sm }}>
           <ProgressBar value={pos.index / pos.total} label={`Onboarding progress, step ${pos.index} of ${pos.total}`} height={4} />
         </View>
-        <Text
-          ref={titleRef}
-          {...heading(1)}
-          style={[textStyle('title', t.textPrimary), { marginTop: spacing.xxl }]}
-          maxFontSizeMultiplier={1.6}
-        >
-          {title}
-        </Text>
-        {description ? (
-          <Text style={[textStyle('body', t.textSecondary), { marginTop: spacing.sm }]} maxFontSizeMultiplier={2}>
-            {description}
+        <PageTransition pageKey={page} direction={direction} style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
+          <Text
+            ref={titleRef}
+            {...heading(1)}
+            style={iosTextStyle('largeTitle', t.textPrimary)}
+            maxFontSizeMultiplier={1.6}
+          >
+            {title}
           </Text>
-        ) : null}
+          {description ? (
+            <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+              {description}
+            </Text>
+          ) : null}
+        </PageTransition>
       </View>
 
       {scroll ? (
@@ -238,10 +247,10 @@ export function StepShell({
           keyboardDismissMode="interactive"
           contentContainerStyle={{ paddingTop: spacing.xl, paddingBottom: spacing.xxl }}
         >
-          <View style={column}>{children}</View>
+          <PageTransition pageKey={page} direction={direction} style={column}>{children}</PageTransition>
         </ScrollView>
       ) : (
-        <View style={[column, { flex: 1, paddingTop: spacing.lg }]}>{children}</View>
+        <PageTransition pageKey={page} direction={direction} style={[column, { flex: 1, paddingTop: spacing.lg }]}>{children}</PageTransition>
       )}
 
       {primaryLabel && onPrimary ? (
@@ -250,7 +259,7 @@ export function StepShell({
             {primaryHint ? (
               <Text
                 accessibilityLiveRegion="polite"
-                style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]}
+                style={[iosTextStyle('footnote', t.textSecondary), { textAlign: 'center' }]}
                 maxFontSizeMultiplier={2}
               >
                 {primaryHint}
@@ -276,7 +285,7 @@ export function StepShell({
         <SectionRail current={pos.section} />
         <View
           style={{
-            flex: 1, maxWidth: 720, backgroundColor: t.surface, borderRadius: radius.xxl, borderCurve: 'continuous',
+            flex: 1, maxWidth: 720, backgroundColor: t.surface, borderRadius: radius.sheet, borderCurve: 'continuous',
             boxShadow: t.shadowMd, overflow: 'hidden',
           }}
         >
@@ -292,8 +301,7 @@ export function StepShell({
   }
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg }}>
-      {Platform.OS === 'web' ? <View style={{ height: spacing.md }} /> : null}
+    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg, paddingTop: Platform.OS === 'web' ? spacing.md : 0 }}>
       {NativeKAV && Platform.OS !== 'web'
         ? <NativeKAV behavior="padding" style={{ flex: 1 }}>{body}</NativeKAV>
         : <View style={{ flex: 1 }}>{body}</View>}

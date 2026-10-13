@@ -75,3 +75,16 @@ describe('SECTION_SEARCH', () => {
     expect(SECTION_SEARCH.scholarships.label).toBe('Search scholarships')
   })
 })
+
+describe('practiceScoreBadge: a fact, never a verdict', () => {
+  const { practiceScoreBadge } = require('../exploreModel')
+  it('names the best mock, else practice accuracy, else nothing', () => {
+    expect(practiceScoreBadge(42, 90)).toEqual({ label: 'Best mock 42%', tone: 'neutral' })
+    expect(practiceScoreBadge(undefined, 90)).toEqual({ label: 'Practice accuracy 90%', tone: 'neutral' })
+    expect(practiceScoreBadge(undefined, undefined)).toBeNull()
+  })
+  it('is the same neutral tone at every value', () => {
+    const tones = new Set([0, 20, 49, 50, 74, 75, 100].map(v => practiceScoreBadge(v, undefined)!.tone))
+    expect([...tones]).toEqual(['neutral'])
+  })
+})

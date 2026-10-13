@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import {
-  lightTheme, typography, motion, glass,
-  type Theme, type Typography, type Motion, type Glass,
+  lightTheme, motion, glass,
+  type Theme, type Motion, type Glass,
 } from './tokens'
 
 // Iskotify has one palette (the light theme), so the context is a constant.
@@ -10,12 +10,11 @@ import {
 
 interface ThemeContextValue {
   theme:  Theme
-  typo:   Typography
   motion: Motion
   glass:  Glass
 }
 
-const VALUE: ThemeContextValue = { theme: lightTheme, typo: typography, motion, glass }
+const VALUE: ThemeContextValue = { theme: lightTheme, motion, glass }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 

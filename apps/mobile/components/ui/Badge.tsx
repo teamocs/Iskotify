@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle, type Theme } from '../../theme/tokens'
+import { weight, radius, spacing, type Theme, iosTextStyle } from '../../theme/tokens'
 
 type Tone = 'accent' | 'neutral' | 'success' | 'warning' | 'danger'
 
@@ -29,12 +29,12 @@ export function Badge({ label, tone = 'accent' }: { label: string; tone?: Tone }
         backgroundColor: t[c.bg],
         borderWidth: 1,
         borderColor: t[c.border],
-        borderRadius: radius.pill,
+        borderRadius: radius.capsule,
         paddingHorizontal: spacing.sm,
         paddingVertical: 2,
       }}
     >
-      <Text style={[textStyle('caption', t[c.fg]), weight('600')]} maxFontSizeMultiplier={1.4}>{label}</Text>
+      <Text style={[iosTextStyle('caption', t[c.fg]), weight('600')]} maxFontSizeMultiplier={1.4}>{label}</Text>
     </View>
   )
 }

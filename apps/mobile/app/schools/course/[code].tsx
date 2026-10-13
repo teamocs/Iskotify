@@ -309,7 +309,7 @@ export default function CourseSchoolsScreen() {
         >
           <Skeleton width="70%" height={28} />
           <Skeleton width="90%" height={14} />
-          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={88} radius={radius.xl} />)}
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={88} radius={radius.card} />)}
         </View>
       </SafeAreaView>
     )

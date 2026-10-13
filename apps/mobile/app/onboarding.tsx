@@ -17,7 +17,7 @@ import { eq, notInArray } from 'drizzle-orm'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, textStyle } from '../theme/tokens'
+import { spacing, iosTextStyle } from '../theme/tokens'
 import { Button } from '../components/ui/Button'
 import { TextField } from '../components/ui/TextField'
 import { heading } from '../components/ui/a11y'
@@ -26,7 +26,7 @@ import { StepShell } from '../components/onboarding/StepShell'
 import { ConsentControls, type ConsentFormValue } from '../components/consent/ConsentControls'
 import { applyAnalyticsConsent } from '../services/analyticsConsent'
 import { consentFormReason, consentPatch, isConsentCurrent } from '../utils/consent'
-import { ChoiceRow } from '../components/onboarding/ChoiceRow'
+import { ChoiceGroup, ChoiceRow, choicePosition } from '../components/onboarding/ChoiceRow'
 import { QuestionView, ResultsView } from '../components/onboarding/PreAssessment'
 import {
   nextStep, prevStep, resumeStep, furthestStep, type StepId, type ProgressMarker,
@@ -525,11 +525,11 @@ export default function OnboardingScreen() {
               accessibilityIgnoresInvertColors
               accessible={false}
             />
-            <Text {...heading(1)} style={[textStyle('title', t.textPrimary), { textAlign: 'center' }]}>
+            <Text {...heading(1)} style={[iosTextStyle('largeTitle', t.textPrimary), { textAlign: 'center' }]}>
               {isError ? "That didn't load" : 'Hang tight, almost there'}
             </Text>
             <Text
-              style={[textStyle('body', t.textSecondary), { textAlign: 'center', marginTop: spacing.md, marginBottom: spacing.xxl }]}
+              style={[iosTextStyle('body', t.textSecondary), { textAlign: 'center', marginTop: spacing.md, marginBottom: spacing.xxl }]}
               accessibilityLiveRegion="polite"
             >
               {isError
@@ -546,7 +546,7 @@ export default function OnboardingScreen() {
                   accessibilityHint="Skips setup for now and finishes it next time you open the app"
                   fullWidth
                 />
-                <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]}>
+                <Text style={[iosTextStyle('footnote', t.textSecondary), { textAlign: 'center' }]}>
                   {"We'll finish getting things ready next time you open the app."}
                 </Text>
               </View>
@@ -602,10 +602,10 @@ export default function OnboardingScreen() {
             autoFocus={Platform.OS === 'web'}
           />
           <View style={{ gap: spacing.sm }}>
-            <Text style={textStyle('label', t.textPrimary)} maxFontSizeMultiplier={2}>
+            <Text style={[iosTextStyle('footnote', t.textSecondary), { paddingHorizontal: spacing.lg }]} maxFontSizeMultiplier={2}>
               Grade (Philippine K-12)
             </Text>
-            <View accessibilityRole="radiogroup" accessibilityLabel="Grade level" style={{ gap: spacing.sm }}>
+            <ChoiceGroup accessibilityRole="radiogroup" accessibilityLabel="Grade level">
               {GRADES.map(g => (
                 <ChoiceRow
                   key={g}
@@ -617,7 +617,7 @@ export default function OnboardingScreen() {
                   onPress={() => setGradeLevel(g)}
                 />
               ))}
-            </View>
+            </ChoiceGroup>
           </View>
         </View>
       </StepShell>
@@ -666,20 +666,21 @@ export default function OnboardingScreen() {
             sections={sections}
             style={{ flex: 1 }}
             keyExtractor={(item, i) => ('schoolId' in item ? item.schoolId : item.id) + ':' + i}
-            contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.xxl, gap: spacing.sm }}
+            contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.xxl }}
             keyboardShouldPersistTaps="handled"
             stickySectionHeadersEnabled={false}
             ListEmptyComponent={
-              <Text style={[textStyle('body', t.textSecondary), { textAlign: 'center', paddingTop: spacing.xxl }]}>
+              <Text style={[iosTextStyle('body', t.textSecondary), { textAlign: 'center', paddingTop: spacing.xxl }]}>
                 {q ? `Nothing matches “${q}”. Try the school's short name, like UPLB.` : 'No exams to show yet. Check your connection.'}
               </Text>
             }
             renderSectionHeader={({ section }) => (
-              <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginTop: spacing.lg, marginBottom: spacing.xs }]}>
+              <Text {...heading(2)} style={[iosTextStyle('headline', t.textPrimary), { marginTop: spacing.lg, marginBottom: spacing.xs }]}>
                 {section.title}
               </Text>
             )}
-            renderItem={({ item, section }) => {
+            renderItem={({ item, section, index }) => {
+              const position = choicePosition(index, section.data.length)
               if (section.key === 'exams') {
                 const ex = item as ExamOption
                 const sel = selectedExams.some(s => s.schoolId === ex.schoolId)
@@ -687,6 +688,7 @@ export default function OnboardingScreen() {
                 return (
                   <ChoiceRow
                     mode="checkbox"
+                    position={position}
                     label={ex.schoolName}
                     description={meta}
                     selected={sel}
@@ -699,6 +701,7 @@ export default function OnboardingScreen() {
               return (
                 <ChoiceRow
                   mode="checkbox"
+                  position={position}
                   label={lst.title}
                   description={lst.exam_date
                     ? new Date(lst.exam_date).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })

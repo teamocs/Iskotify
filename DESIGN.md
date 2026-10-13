@@ -233,7 +233,7 @@ Reach tokens through `useTheme()`:
 ```tsx
 const { theme: t } = useTheme()
 const s = useMemo(() => StyleSheet.create({
-  label: { color: t.textSecondary, ...textStyle('bodySm', t.textSecondary) },
+  label: { ...iosTextStyle('footnote', t.textSecondary) },
 }), [t])
 ```
 
@@ -275,33 +275,32 @@ every screen through `useTheme()`.
 
 **One palette**: the app is light-only regardless of the phone's setting — `app.json` sets `userInterfaceStyle: "light"`, the status bar is dark-on-light, and the web build declares `color-scheme: light`. Do not add a dark variant (owner decision, 2026-09).
 
-#### Type roles and the `textStyle()` helper
+#### Type roles: `<Text role>` and `iosTextStyle()`
 
-Type scale bottoms out at **12pt** (`xs`) — nothing below that is readable.
+The iOS text roles (Apple HIG sizes at the default content size). The floor is **12pt**.
 
-| Role | Size | Font | Line height | Use case |
-|---|---|---|---|---|
-| `display` | 48 | Heading Bold | 54 | Largest hero text (rare) |
-| `title` | 26 | Heading Bold | 32 | Section titles |
-| `headline` | 20 | Heading Bold | 26 | Card titles, list headers |
-| `titleSm` | 17 | Heading SemiBold | 22 | Small card titles |
-| `body` | 16 | Body Regular | 24 | Primary reading text |
-| `bodySm` | 13 | Body Regular | 19 | Secondary text, descriptions |
-| `label` | 13 | Body SemiBold | 18 | Form labels, button-adjacent text |
-| `button` | 16 | Heading Bold | 20 | Button labels |
-| `caption` | 12 | Body Regular | 16 | Badges, hints, metadata |
-| `numeric` | 22 | Heading Bold | 28 | Tabular numbers (scores, counters) |
-| `numericLg` | 36 | Heading Bold | 42 | Large tabular numbers (exams, times) |
-
-Use via `textStyle(role)` or `textStyle(role, color)` to get a TextStyle with optional colour:
+| Role | Size / line | Weight | Use case |
+|---|---|---|---|
+| `largeTitle` | 34/41 | 700 | Page titles (the h1) |
+| `title1` | 28/34 | 700 | Big section or dialog titles |
+| `title2` | 22/28 | 700 | Section titles |
+| `title3` | 20/25 | 600 | Card titles, sub-headings |
+| `headline` | 17/22 | 600 | Row titles, button labels |
+| `body` | 17/22 | 400 | Reading text |
+| `callout` | 16/21 | 400 | Supporting text |
+| `subheadline` | 15/20 | 400 | Secondary lines, row subtitles |
+| `footnote` | 13/18 | 400 | Captions under groups, hints (600 for a label) |
+| `caption` | 12/16 | 400 | Badges, metadata |
+| `numeric` / `numericLg` | 22/28, 34/41 | 700 | Tabular numbers (scores, timers) |
 
 ```tsx
-<Text style={textStyle('body', t.textPrimary)} numberOfLines={1}>
-  Your primary text
-</Text>
+<Text role="body" color={t.textSecondary}>Your primary text</Text>
+<Text style={[iosTextStyle('footnote', t.textSecondary), weight('600')]}>Label</Text>
 ```
 
-Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack on web), set by the theme roles (`textStyle` / `iosTextStyle` / `<Text role>`) via `systemFont` in `theme/tokens.ts`. Outfit and Lexend are no longer loaded on mobile (iOS redesign P1b); nothing loads before first paint. Weight bumps on top of a role use `weight()`; never set a literal `fontFamily` (guarded by `__tests__/noBrandFonts.test.ts`). Admin and the landing page keep Outfit/Lexend for now.
+The legacy `textStyle()` API (display, title, titleSm, bodySm, label, button…) was retired in the final P4 PR. Six aliases (`title`, `headline`, `titleSm`, `body`, `bodySm`, `caption`) remain, deprecated, only for the owner-frozen `app/landing.tsx`; `typography` / `typo` are gone. `__tests__/iosLanguageComplete.test.ts` keeps them out of every other file.
+
+Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack on web), set by the theme roles (`iosTextStyle` / `<Text role>`) via `systemFont` in `theme/tokens.ts`. Outfit and Lexend are no longer loaded on mobile (iOS redesign P1b); nothing loads before first paint. Weight bumps on top of a role use `weight()`; never set a literal `fontFamily` (guarded by `__tests__/noBrandFonts.test.ts`). Admin and the landing page keep Outfit/Lexend for now.
 
 #### Spacing and radius
 
@@ -327,9 +326,27 @@ Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack o
 | `group` | 18 | Inset grouped lists (`InsetGroup`) |
 | `card` | 22 | Cards |
 | `sheet` | 28 | Sheets and dialogs (in-place and routed) |
+| `heroSheet` | 36 | The sign-in sheet over the maroon hero (canvas "Sign in"), on `glass.sheetFill` (the ground at 80%, frosted on web) |
 | `capsule` | 999 | Pills, segmented control, filter chips, round buttons |
 
-`sm` (10) was split into `chip`/`field` and removed. The legacy `md`/`lg`/`xl`/`xxl`/`pill` keys remain as aliases (14/18/22/28/999) until the P4 screen migrations finish.
+`sm` (10) was split into `chip`/`field` and removed. The legacy `lg`/`xl`/`xxl`/`pill` aliases were removed in the final P4 PR; `md` (14, = `button`) stays, deprecated, only for the owner-frozen `app/landing.tsx`.
+
+#### Motion (`motion` in `theme/tokens.ts`)
+
+Calm by default (owner feedback, 2026-10-13: "do not over transition or animate it"). Nothing overshoots except the correct-answer check, and no transition runs longer than 340ms. Animate transform and opacity only.
+
+| Token | Native | Web | Use |
+|---|---|---|---|
+| `spring.snappy` | damping 34, stiffness 500, overshoot clamped | `cubic-bezier(0.25,0.9,0.3,1)` 200ms | press, segmented thumb, tab lens |
+| `spring.smooth` | damping 32, stiffness 360, overshoot clamped | `cubic-bezier(0.32,0.72,0,1)` 340ms | sheets in, push, flashcard flip |
+| `spring.bouncy` | damping 18, stiffness 300 | — | ONLY `AnimatedCheck` (the correct-answer check), once |
+| `duration.fade` | 140ms | | tab content, bar labels, route fade |
+| `duration.reduced` | 120ms | | every Reduce Motion crossfade |
+| `duration.sheetExit` | 200ms | | an in-place sheet leaving |
+| `duration.bar` | 260ms ease-out | | tab capsule minimize / expand, search morph |
+| `duration.page` | 200ms ease-out, `pageTravel` 8pt | | onboarding steps, tour cards |
+
+`pressScale` stays 0.97. `__tests__/calmMotion.test.ts` keeps `spring.bouncy` to AnimatedCheck, bans inline springs and caps every duration at 340ms (the skeleton's loading pulse aside).
 
 ### Responsive layout
 
@@ -388,10 +405,10 @@ Example responsive screen:
 | `ListRow` | Compact list item with optional leading icon, two text lines, optional trailing. Now an `InsetRow` (same props). | Pressable with `accessibilityRole="button"` if interactive |
 | `SegmentedControl` | Capsule track with a sliding white thumb (spring.snappy; jumps under Reduce Motion), haptic tick on change. ≥ 44pt. | `radiogroup` / `radio` with `aria-checked` (no tab panel); roving tabindex, Left/Right, Home/End and Space on web |
 | `SearchField` | Search input: 12pt field radius, `inputBorder` edge, 44pt "Clear search" button, optional visible label. | Named by its label or `accessibilityLabel` |
-| `ListCard` | Broader list card, tappable. Used in lists and grids. | `accessibilityRole="button"`, `accessibilityLabel` |
 | `SectionHeader` | Section title with optional trailing action. | `role="heading"` via `<Text accessibilityRole="header">` |
-| `Sheet` | In-place modal panel (use it for forms with inputs): 28pt corners, glass header, slides in on spring.smooth and out over 220ms before unmounting (crossfade both ways under Reduce Motion); a centred dialog from medium widths up. Routed sheets use `sheetRouteOptions()` (native formSheet, detents 0.5 / 1, grabber, 28pt). | `role="dialog"`, `aria-modal="true"`, `aria-label` |
-| `EmptyState` / `ErrorState` / `LoadingState` | Feedback states when lists are empty, errors occur, or data is loading. | Clear messaging; `LoadingState` avoids announcing a loading spinner repeatedly |
+| `Sheet` | In-place modal panel (use it for forms with inputs): 28pt corners, glass header, slides in on spring.smooth and out over 200ms before unmounting (crossfade both ways under Reduce Motion); a centred dialog from medium widths up. Routed sheets use `sheetRouteOptions()` (native formSheet, detents 0.5 / 1, grabber, 28pt). | `role="dialog"`, `aria-modal="true"`, `aria-label` |
+| `EmptyState` / `ErrorState` | Feedback states when lists are empty or errors occur (loading uses `Skeleton`). | Clear messaging |
+| `PageTransition` | A paged flow's page change (onboarding steps, tour cards): a 200ms ease-out crossfade with at most an 8pt slide (never a spring); a 120ms crossfade under Reduce Motion. | Transform and opacity only |
 | `InfoBanner` | Top-of-screen alert/notification. | `role="alert"` if notifying of an error or state change |
 
 ### Navigation
@@ -404,10 +421,10 @@ Four top-level destinations (redesign M2, direction C, 2026-09):
 
 Each lives at a route: `/`, `/practice`, `/explore`, `/progress`.
 
-**Floating tab bar** (`components/navigation/FloatingTabBar.tsx`; Android, iOS until P2b, and web below 1024): a `Glass variant="bar"` capsule with the four tabs (icon + 12pt label, active in `accentText` on an `accentSurface` lens that springs on `spring.bouncy`, others `textPrimary`) and a separate 62pt glass search circle 12pt to its right. Web caps the capsule at 560 and centres it.
+**Floating tab bar** (`components/navigation/FloatingTabBar.tsx`; Android, iOS until P2b, and web below 1024): a `Glass variant="bar"` capsule with the four tabs (icon + 12pt label, active in `accentText` on an `accentSurface` lens that slides on `spring.snappy` (no sideways overshoot), others `textPrimary`) and a separate 62pt glass search circle 12pt to its right. Web caps the capsule at 560 and centres it.
 - *Minimize on scroll*: scrolling down past 140pt collapses the capsule to a 62pt pill with the active icon (a "Show tab bar, {Tab} selected" button); only the focused screen moves it, and the bottom overscroll bounce does not count as scrolling up; scrolling up, being within 80pt of the top, a tab change or tapping the pill expands it. Every tab scroll view feeds `TabBarScrollContext` (`Screen`, `ScreenScroll`, `ExploreGrid`, `AnalyticsDashboard`).
 - *Search morph*: on Search, the capsule becomes a 62pt "Back to {tab}" circle and the search circle widens into the bottom search field (shared with the screen via `components/search/searchQuery`), riding above the keyboard (keyboard-controller `KeyboardStickyView`).
-- Haptic selection tick on a tab change only; re-pressing the current tab scrolls it to the top; `tabPress` and `defaultPrevented` are respected. Reduce Motion: the lens jumps and the morphs are a 160ms crossfade.
+- Haptic selection tick on a tab change only; re-pressing the current tab scrolls it to the top; `tabPress` and `defaultPrevented` are respected. The minimize / expand and search morphs are a 260ms ease-out with a 140ms label crossfade; tab content only crossfades (140ms, no shift). Reduce Motion: the lens jumps and the morphs are a 120ms crossfade.
 - Android glass: each tab scene sits in its own `BlurTargetView` (`SceneBlurTarget` via the navigator's `screenLayout`); the bar, rendered after the scenes, passes the focused scene's ref to `<Glass>`. API 31+ blurs; API 30 and below stays opaque `#fdf4f4`.
 
 **Large titles** (`components/navigation/LargeTitleHeader.tsx`): `TabHeader` and `TodayHeader` render a 34/41 bold large title. On screens whose header scrolls (`Screen headerScrolls`, a header inside the scroll content, or Progress via `AnalyticsDashboard header` + `useBandScrollY`; Explore keeps a fixed header for now) it collapses into a 17pt semibold inline title on a `Glass variant="header"` band with a 24pt bg→transparent fade, hidden from assistive tech until collapsed. `GlassIconButton` is the round glass header control (40pt disc, 44pt target, label required).
@@ -454,14 +471,17 @@ Status scores (progress, accuracy, rankings) use **neutral colours** (`surface` 
 
 One guard per redesigned area:
 - `apps/mobile/app/(tabs)/__tests__/m2DesignTokens.test.ts` — Today, Progress, Profile; since the iOS P4 Today PR also no legacy role names (`textStyle`, `typo`, `titleSm`, `bodySm`…) and no fixed `height:` anywhere in `components/home`, and no `typo.*` / `fontSize` in `components/calendar`. The one allowed uppercase is Today's date eyebrow (owner spec, 2026-10-13).
+- `apps/mobile/__tests__/englishOnly.test.ts` — English only (brandbook §6): no Taglish ("Tara… natin", "Kaya mo", "Tapos na", "Salamat"…) anywhere in app/, components/, utils/, services/ and hooks/, outside the tagline and the frozen landing page
 - `apps/mobile/__tests__/noScareCopy.test.ts` — app-wide voice (brandbook §5–6): no "behind" as status text, no "only N … left" or "N days left" (outside an allowlisted neutral label), no emoji in `app/`, `components/`, `utils/`, `services/` (notifications) and `hooks/`
 - `apps/mobile/components/explore/__tests__/designLint.test.ts` — Explore, listings, schools, career
 - `apps/mobile/components/practice/__tests__/practiceAreaTokens.test.ts` — Practice, exam runner, results, notes, estimator
+- `apps/mobile/app/__tests__/m2RestDesignTokens.test.ts` — first run, auth, settings and info pages; since the iOS P4 remaining-screens PR also onboarding, sign-in, the guest diagnostic, consent, the tour, subject detail, the overlays and the primitives they use: no legacy type API or retired role names, no legacy radius keys, no raw `Modal` (the Sheet primitive aside) and no fixed `height:` on a text container
+- `apps/mobile/__tests__/iosLanguageComplete.test.ts` — repo-wide (app/, components/, hooks/): no `textStyle()` or retired role name, no `typo.`/`typography.`, no `fontSize:` literal, no `Modal` imported from react-native, and no readiness/accuracy/score badge whose tone follows its value, no legacy radius alias and no fixed `height:` on a text container, outside a printed five-entry allowlist (the frozen landing page; the Sheet primitive, passage reader, figure zoom and estimator disclaimer for Modal only). The allowlist never grows
 - `apps/mobile/app/__tests__/m3AppScreensDesign.test.ts` — M3: practice choosers and runners, notes, subjects, estimator, requirements, scholarship profile, results tracker and their shared components; also requires every listed screen to lay out through `Screen` / `TwoColumn` / `useBreakpoint`, and every tab's web refresh control to be icon-only on phones
 
 Each enforces the same rules on the files it scans:
 - No raw hex colours (`#rrggbb`) or `rgba()` literals — all colours from `useTheme()` tokens
-- No hand-set `fontSize` — all type from `textStyle(role)` roles
+- No hand-set `fontSize` — all type from the iOS roles (`<Text role>` / `iosTextStyle()`)
 - No uppercase via `.toUpperCase()` or CSS `text-transform: uppercase` (sentence case only)
 - No emoji or Unicode icon glyphs (›, ‹, ▲, ▼, ✕, ✓, ＋, ↪, ⚠) — use Lineicons only
 

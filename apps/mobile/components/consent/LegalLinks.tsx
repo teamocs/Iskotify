@@ -1,7 +1,7 @@
 import { Text, type TextStyle } from 'react-native'
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
-import { textStyle } from '../../theme/tokens'
+import { iosTextStyle } from '../../theme/tokens'
 
 type WebLinkProps = { href?: string }
 
@@ -31,7 +31,7 @@ function LegalLink({ label, to }: { label: string; to: '/terms' | '/privacy' }) 
 export function LegalLine({ verb = 'continuing' }: { verb?: string } = {}) {
   const { theme: t } = useTheme()
   return (
-    <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+    <Text style={[iosTextStyle('caption', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
       {`By ${verb} you agree to the `}
       <LegalLink label="Terms" to="/terms" />
       {' and acknowledge the '}

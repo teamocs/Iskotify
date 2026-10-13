@@ -75,20 +75,6 @@ export const lightTheme = {
   inputBorder:   '#9c7c7c',
 }
 
-// Type scale (min 12 for readability — no body/label below 12pt).
-export const typography = {
-  xs:      12,   // was 11 (below the readable minimum)
-  sm:      13,
-  base:    16,
-  md:      17,
-  lg:      20,
-  xl:      22,
-  h3:      26,
-  h2:      30,
-  h1:      36,
-  display: 48,
-} as const
-
 // ── Type: the platform UI font (iOS redesign P1a/P1b) ─────────────────────────
 // Every word is drawn in the system font. The brand fonts were retired in P1b;
 // the legacy roles below are aliases of these iOS roles.
@@ -145,48 +131,36 @@ export function iosTextStyle(role: IosTextRole, color?: string): TextStyle {
   return color ? { ...base, color } : { ...base }
 }
 
-type LegacyTextRole =
-  | 'display' | 'title' | 'headline' | 'titleSm' | 'body' | 'bodySm'
-  | 'label' | 'button' | 'caption' | 'numeric' | 'numericLg'
-
-/** Where each legacy role lands (`label` also takes fontWeight 600). The
- *  cut-over is a token edit, so the `textStyle()` call sites are unchanged. */
+/**
+ * The legacy text API, kept ONLY for app/landing.tsx: its content is frozen
+ * by the owner (2026-10-12), so its six call sites stay as approved. Every
+ * other file uses `<Text role>` or `iosTextStyle()` (guarded repo-wide by
+ * __tests__/iosLanguageComplete.test.ts). The other retired roles (display,
+ * label, button, numeric, numericLg) were removed in the final P4 PR.
+ * @deprecated Use iosTextStyle() or <Text role>.
+ */
 export const legacyTextRoleMap = {
-  display:   'largeTitle',
   title:     'title1',
   headline:  'title3',
   titleSm:   'headline',
   body:      'body',
   bodySm:    'footnote',
-  label:     'footnote',
-  button:    'headline',
   caption:   'caption',
-  numeric:   'numeric',
-  numericLg: 'numericLg',
-} as const satisfies Record<LegacyTextRole, IosTextRole>
+} as const satisfies Record<string, IosTextRole>
 
-/**
- * Legacy type roles, now aliases of the iOS roles (see legacyTextRoleMap).
- * Kept so existing `textStyle(role, color)` call sites work unchanged; new
- * code uses `<Text role>` or `iosTextStyle()`.
- */
+/** @deprecated Landing only; see legacyTextRoleMap. */
 export const textStyles = {
-  display:   iosTextStyles[legacyTextRoleMap.display],
   title:     iosTextStyles[legacyTextRoleMap.title],
   headline:  iosTextStyles[legacyTextRoleMap.headline],
   titleSm:   iosTextStyles[legacyTextRoleMap.titleSm],
   body:      iosTextStyles[legacyTextRoleMap.body],
   bodySm:    iosTextStyles[legacyTextRoleMap.bodySm],
-  label:     { ...iosTextStyles[legacyTextRoleMap.label], fontWeight: '600' },
-  button:    iosTextStyles[legacyTextRoleMap.button],
   caption:   iosTextStyles[legacyTextRoleMap.caption],
-  numeric:   iosTextStyles[legacyTextRoleMap.numeric],
-  numericLg: iosTextStyles[legacyTextRoleMap.numericLg],
-} as const satisfies Record<LegacyTextRole, IosTextRoleStyle>
+} as const satisfies Record<keyof typeof legacyTextRoleMap, IosTextRoleStyle>
 
 export type TextStyleRole = keyof typeof textStyles
 
-/** A type role as a TextStyle, optionally with a colour (pass a theme token). */
+/** @deprecated Landing only. A legacy role as a TextStyle, optionally with a colour. */
 export function textStyle(role: TextStyleRole, color?: string): TextStyle {
   const base = textStyles[role] as TextStyle
   return color ? { ...base, color } : { ...base }
@@ -207,19 +181,25 @@ export function weight<W extends '400' | '500' | '600' | '700'>(w: W): { fontFam
  * Reduce Motion travel becomes a `duration.reduced` crossfade.
  */
 export const motion = {
+  // Calmer motion (owner feedback, 2026-10-13): snappy and smooth are near
+  // critically damped and clamp any overshoot, so nothing bounces sideways.
   spring: {
-    snappy: { damping: 30, stiffness: 400 },  // press, segments, tabs
-    smooth: { damping: 26, stiffness: 260 },  // sheets, push, large title
-    bouncy: { damping: 14, stiffness: 220 },  // correct answer, streak (once)
+    snappy: { damping: 34, stiffness: 500, overshootClamping: true },  // press, segments, tab lens, bar
+    smooth: { damping: 32, stiffness: 360, overshootClamping: true },  // sheets in, push, large-title band
+    bouncy: { damping: 18, stiffness: 300 },  // ONLY the correct-answer check (AnimatedCheck), once
   },
   curve: {
-    snappy: { easing: 'cubic-bezier(.2,.9,.25,1)', duration: 280 },
-    smooth: { easing: 'cubic-bezier(.32,.72,0,1)', duration: 480 },
+    snappy: { easing: 'cubic-bezier(0.25,0.9,0.3,1)', duration: 200 },
+    smooth: { easing: 'cubic-bezier(0.32,0.72,0,1)', duration: 340 },
   },
   duration: {
-    fade:    200,  // toasts, skeleton to content
-    reduced: 160,  // Reduce Motion crossfade
+    fade:      140,  // toasts, skeleton to content, tab content, bar labels
+    reduced:   120,  // Reduce Motion crossfade
+    sheetExit: 200,  // an in-place sheet leaving
+    bar:       260,  // the tab capsule's minimize / expand and search morph (ease-out)
+    page:      200,  // a paged flow's crossfade (onboarding, tour)
   },
+  pageTravel: 8,     // at most this far does a page slide as it fades in
   pressScale: 0.97,
 } as const
 
@@ -249,6 +229,12 @@ export const glass = {
   androidIntensity:  60,
   androidBlurReductionFactor: 4,
   labelOverAccent: 'textPrimary',
+  // The sign-in sheet (canvas "Sign in"): the page ground at 80% over the
+  // maroon hero, frosted on web. Every label on it (textPrimary, textSecondary,
+  // accentText) clears 4.5:1 even over the darkest hero shape (accentPressed);
+  // see theme/__tests__/tokens.test.ts.
+  sheetFill:      'rgba(253,244,244,0.80)',
+  sheetBackdropFilter: 'blur(30px) saturate(180%)',
 } as const satisfies { labelOverAccent: keyof typeof lightTheme } & Record<string, string | number>
 
 // 4/8 spacing rhythm.
@@ -262,22 +248,20 @@ export const spacing = {
   xxxl: 32,
 } as const
 
-// Corner radii (use with { borderCurve: 'continuous' } except pill/capsule).
-// The iOS shape scale (chip … capsule) is the target; the old keys stay as
-// aliases until the final P4 PR. `sm` (10) was split into chip 8 / field 12
-// in P1c and is gone.
+// Corner radii: the iOS shape scale (use with { borderCurve: 'continuous' }
+// except capsule). The legacy aliases (lg, xl, xxl, pill) were removed in the
+// final P4 PR; `md` (14, = button) stays only for the owner-frozen
+// app/landing.tsx. `sm` (10) was split into chip 8 / field 12 in P1c.
 export const radius = {
+  /** @deprecated Landing only; use `button`. */
   md:   14,
-  lg:   18,
-  xl:   22,
-  xxl:  28,
-  pill: 999,
   chip:    8,
   field:   12,
   button:  14,
   group:   18,   // inset grouped list
   card:    22,
   sheet:   28,
+  heroSheet: 36, // the sign-in sheet over the maroon hero (canvas "Sign in")
   capsule: 999,
 } as const
 
@@ -301,7 +285,6 @@ export const layout = {
 } as const
 
 export type Theme      = typeof lightTheme
-export type Typography = typeof typography
 export type Spacing    = typeof spacing
 export type Radius     = typeof radius
 export type Motion     = typeof motion

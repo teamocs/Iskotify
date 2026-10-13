@@ -40,7 +40,7 @@ export function DeckRow({ name, subtitle, dueCount, onOpen, onDelete }: Props) {
           ]
         }}
       >
-        <View {...decorative} style={{ width: 36, height: 36, borderRadius: radius.md, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
+        <View {...decorative} style={{ width: 36, height: 36, borderRadius: radius.button, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
           <Lineicons icon={Layers1Outlined} size={18} color={t.accentText} />
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -60,7 +60,7 @@ export function DeckRow({ name, subtitle, dueCount, onOpen, onDelete }: Props) {
           const { pressed, focused } = state as WebPressableState
           return [
             {
-              width: 44, height: 44, marginRight: spacing.xs, borderRadius: radius.pill,
+              width: 44, height: 44, marginRight: spacing.xs, borderRadius: radius.capsule,
               alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent',
             },
             focusRing(t.focusRing, focused),

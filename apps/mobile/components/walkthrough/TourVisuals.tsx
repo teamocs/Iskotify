@@ -7,7 +7,7 @@ import {
   Pencil1Outlined, CalendarDaysOutlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { decorative } from '../ui/a11y'
 import { TAB_DESTINATIONS, type TabName } from '../navigation/destinations'
 import type { TourCardId } from './tourFlow'
@@ -28,7 +28,7 @@ function Panel({ children, style, dim }: { children: React.ReactNode; style?: Vi
   return (
     <View
       style={[{
-        backgroundColor: t.surfaceRaised, borderRadius: radius.lg, borderCurve: 'continuous',
+        backgroundColor: t.surfaceRaised, borderRadius: radius.group, borderCurve: 'continuous',
         padding: spacing.md, gap: spacing.sm, boxShadow: t.shadowSm, opacity: dim ? 0.45 : 1,
       }, style]}
     >
@@ -37,14 +37,15 @@ function Panel({ children, style, dim }: { children: React.ReactNode; style?: Vi
   )
 }
 
-function Line({ children, role = 'bodySm', tone = 'secondary' }: {
+function Line({ children, role = 'footnote', strong, tone = 'secondary' }: {
   children: React.ReactNode
-  role?: 'bodySm' | 'label' | 'caption' | 'titleSm' | 'numeric' | 'numericLg'
+  role?: 'footnote' | 'caption' | 'headline' | 'numeric' | 'numericLg'
+  strong?: boolean
   tone?: 'primary' | 'secondary' | 'accent'
 }) {
   const { theme: t } = useTheme()
   const color = tone === 'primary' ? t.textPrimary : tone === 'accent' ? t.accentText : t.textSecondary
-  return <Text style={textStyle(role, color)} numberOfLines={1} maxFontSizeMultiplier={1.3}>{children}</Text>
+  return <Text style={[iosTextStyle(role, color), strong ? weight('600') : null]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{children}</Text>
 }
 
 function Pill({ label, filled }: { label: string; filled?: boolean }) {
@@ -52,11 +53,11 @@ function Pill({ label, filled }: { label: string; filled?: boolean }) {
   return (
     <View
       style={{
-        paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.pill,
+        paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.capsule,
         backgroundColor: filled ? t.accent : t.accentSurface,
       }}
     >
-      <Text style={textStyle('label', filled ? t.textInverse : t.accentText)} maxFontSizeMultiplier={1.3}>{label}</Text>
+      <Text style={{ ...iosTextStyle('footnote', filled ? t.textInverse : t.accentText), ...weight('600') }} maxFontSizeMultiplier={1.3}>{label}</Text>
     </View>
   )
 }
@@ -64,8 +65,8 @@ function Pill({ label, filled }: { label: string; filled?: boolean }) {
 function Bar({ value }: { value: number }) {
   const { theme: t } = useTheme()
   return (
-    <View style={{ height: 6, borderRadius: radius.pill, backgroundColor: t.surface2, overflow: 'hidden' }}>
-      <View style={{ width: `${Math.round(value * 100)}%`, height: '100%', borderRadius: radius.pill, backgroundColor: t.accentText }} />
+    <View style={{ height: 6, borderRadius: radius.capsule, backgroundColor: t.surface2, overflow: 'hidden' }}>
+      <View style={{ width: `${Math.round(value * 100)}%`, height: '100%', borderRadius: radius.capsule, backgroundColor: t.accentText }} />
     </View>
   )
 }
@@ -75,7 +76,7 @@ function IconTile({ icon, active }: { icon: typeof Pencil1Outlined; active?: boo
   return (
     <View
       style={{
-        width: 36, height: 36, borderRadius: radius.md, borderCurve: 'continuous',
+        width: 36, height: 36, borderRadius: radius.button, borderCurve: 'continuous',
         backgroundColor: active ? t.accentSurface : t.surface2, alignItems: 'center', justifyContent: 'center',
       }}
     >
@@ -92,7 +93,7 @@ function MiniTabBar({ active }: { active: TabName }) {
       style={{
         flexDirection: 'row', justifyContent: 'space-around', paddingVertical: spacing.sm,
         borderTopWidth: 1, borderTopColor: t.divider, marginHorizontal: -spacing.lg, marginBottom: -spacing.lg,
-        backgroundColor: t.tabBar, borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl,
+        backgroundColor: t.tabBar, borderBottomLeftRadius: radius.card, borderBottomRightRadius: radius.card,
       }}
     >
       {TAB_DESTINATIONS.map(d => {
@@ -101,13 +102,13 @@ function MiniTabBar({ active }: { active: TabName }) {
           <View key={d.name} style={{ alignItems: 'center', gap: 2, minWidth: 56 }}>
             <View
               style={{
-                paddingHorizontal: spacing.md, paddingVertical: 2, borderRadius: radius.pill,
+                paddingHorizontal: spacing.md, paddingVertical: 2, borderRadius: radius.capsule,
                 backgroundColor: on ? t.accentSurface : 'transparent',
               }}
             >
               <Lineicons icon={d.icon} size={18} color={on ? t.accentText : t.textSecondary} />
             </View>
-            <Text style={textStyle('caption', on ? t.accentText : t.textSecondary)} maxFontSizeMultiplier={1.2}>{d.label}</Text>
+            <Text style={iosTextStyle('caption', on ? t.accentText : t.textSecondary)} maxFontSizeMultiplier={1.2}>{d.label}</Text>
           </View>
         )
       })}
@@ -119,20 +120,20 @@ function WelcomeVisual() {
   return (
     <View style={{ gap: spacing.sm, justifyContent: 'center', flex: 1 }}>
       <Panel dim style={{ marginHorizontal: spacing.xl }}>
-        <Line role="label">Flashcards due</Line>
+        <Line role="footnote" strong>Flashcards due</Line>
       </Panel>
       <Panel>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <IconTile icon={Pencil1Outlined} active />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Line role="label" tone="accent">Next step</Line>
-            <Line role="titleSm" tone="primary">10 Math questions</Line>
+            <Line role="footnote" strong tone="accent">Next step</Line>
+            <Line role="headline" tone="primary">10 Math questions</Line>
           </View>
           <Pill label="Start" filled />
         </View>
       </Panel>
       <Panel dim style={{ marginHorizontal: spacing.xl }}>
-        <Line role="label">Mock exam</Line>
+        <Line role="footnote" strong>Mock exam</Line>
       </Panel>
     </View>
   )
@@ -144,12 +145,12 @@ function TodayVisual() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm }}>
         <Line role="numericLg" tone="primary">42</Line>
         <View style={{ paddingBottom: spacing.xs }}>
-          <Line role="bodySm">days to your exam</Line>
+          <Line role="footnote">days to your exam</Line>
         </View>
       </View>
       <Panel>
-        <Line role="label" tone="accent">Next step</Line>
-        <Line role="titleSm" tone="primary">Science drill, 15 minutes</Line>
+        <Line role="footnote" strong tone="accent">Next step</Line>
+        <Line role="headline" tone="primary">Science drill, 15 minutes</Line>
         <Bar value={0.66} />
         <Line role="caption">2 of 3 done today</Line>
       </Panel>
@@ -164,7 +165,7 @@ function PracticeVisual() {
       <Panel>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Line role="titleSm" tone="primary">Mock exam</Line>
+            <Line role="headline" tone="primary">Mock exam</Line>
             <Line role="caption">Section 2 of 4</Line>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
@@ -176,18 +177,18 @@ function PracticeVisual() {
         <View
           style={{
             flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start',
-            paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: t.successSurface,
+            paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.capsule, backgroundColor: t.successSurface,
           }}
         >
           <Lineicons icon={CheckCircle1Outlined} size={14} color={t.successStrong} />
-          <Text style={textStyle('caption', t.successStrong)} maxFontSizeMultiplier={1.2}>Answers saved</Text>
+          <Text style={iosTextStyle('caption', t.successStrong)} maxFontSizeMultiplier={1.2}>Answers saved</Text>
         </View>
       </Panel>
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         {([[Book1Outlined, 'Drills'], [CalendarDaysOutlined, 'Due today']] as const).map(([icon, label]) => (
           <Panel key={label} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm }}>
             <Lineicons icon={icon} size={16} color={t.accentText} />
-            <Line role="label" tone="primary">{label}</Line>
+            <Line role="footnote" strong tone="primary">{label}</Line>
           </Panel>
         ))}
       </View>
@@ -201,18 +202,18 @@ function ExploreVisual() {
     <Panel>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Line role="titleSm" tone="primary">{title}</Line>
+          <Line role="headline" tone="primary">{title}</Line>
           <Line role="caption">{meta}</Line>
         </View>
         <View
           style={{
             flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.sm, paddingVertical: 2,
-            borderRadius: radius.pill, backgroundColor: added ? t.accentSurface : 'transparent',
+            borderRadius: radius.capsule, backgroundColor: added ? t.accentSurface : 'transparent',
             borderWidth: 1, borderColor: t.accentBorder,
           }}
         >
           <Lineicons icon={added ? CheckCircle1Outlined : PlusOutlined} size={14} color={t.accentText} />
-          <Text style={textStyle('caption', t.accentText)} maxFontSizeMultiplier={1.2}>{added ? 'In focus' : 'Focus'}</Text>
+          <Text style={iosTextStyle('caption', t.accentText)} maxFontSizeMultiplier={1.2}>{added ? 'In focus' : 'Focus'}</Text>
         </View>
       </View>
     </Panel>
@@ -222,11 +223,11 @@ function ExploreVisual() {
       <View
         style={{
           flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md,
-          minHeight: 40, borderRadius: radius.pill, backgroundColor: t.surfaceRaised, borderWidth: 1, borderColor: t.inputBorder,
+          minHeight: 40, borderRadius: radius.capsule, backgroundColor: t.surfaceRaised, borderWidth: 1, borderColor: t.inputBorder,
         }}
       >
         <Lineicons icon={Search1Outlined} size={16} color={t.textSecondary} />
-        <Line role="bodySm">Exams, schools, scholarships</Line>
+        <Line role="footnote">Exams, schools, scholarships</Line>
       </View>
       {row('Scholarship application', 'Deadline in 3 weeks', true)}
       {row('Entrance exam', 'Registration opens soon')}
@@ -239,12 +240,12 @@ function ProgressVisual() {
   return (
     <View style={{ flex: 1, justifyContent: 'center' }}>
       <Panel style={{ gap: spacing.md }}>
-        <Line role="titleSm" tone="primary">Readiness by subject</Line>
+        <Line role="headline" tone="primary">Readiness by subject</Line>
         {rows.map(([name, v]) => (
           <View key={name} style={{ gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Line role="label" tone="primary">{name}</Line>
-              <Line role="label">{`${Math.round(v * 100)}%`}</Line>
+              <Line role="footnote" strong tone="primary">{name}</Line>
+              <Line role="footnote" strong>{`${Math.round(v * 100)}%`}</Line>
             </View>
             <Bar value={v} />
           </View>
@@ -260,10 +261,10 @@ function ReadyVisual() {
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg }}>
       <Image
         source={require('../../assets/images/icon.png')}
-        style={{ width: 88, height: 88, borderRadius: radius.xxl }}
+        style={{ width: 88, height: 88, borderRadius: radius.sheet }}
         accessibilityIgnoresInvertColors
       />
-      <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={1.3}>Para sa mga Iskolar ng Bayan</Text>
+      <Text style={{ ...iosTextStyle('footnote', t.accentText), ...weight('600') }} maxFontSizeMultiplier={1.3}>Para sa mga Iskolar ng Bayan</Text>
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         {TAB_DESTINATIONS.map((d, i) => <IconTile key={d.name} icon={d.icon} active={i === 0} />)}
       </View>
@@ -289,9 +290,9 @@ export function TourVisual({ id, compact }: { id: TourCardId; compact: boolean }
     <View
       {...decorative}
       style={{
-        backgroundColor: t.accentSurface, borderRadius: radius.xl, borderCurve: 'continuous',
+        backgroundColor: t.accentSurface, borderRadius: radius.card, borderCurve: 'continuous',
         padding: spacing.lg, overflow: 'hidden',
-        height: compact ? 288 : undefined, flex: compact ? undefined : 1, minHeight: compact ? undefined : 380,
+        flex: compact ? undefined : 1, minHeight: compact ? 288 : 380,
       }}
     >
       <View style={{ flex: 1, justifyContent: 'center' }}>

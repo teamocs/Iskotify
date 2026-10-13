@@ -208,7 +208,7 @@ export default function EstimatorGradesScreen() {
     return (
       <Screen header={header} edges={['top', 'bottom']}>
         <View accessible accessibilityLabel="Loading your grades" aria-busy style={{ gap: spacing.md, paddingTop: spacing.lg }}>
-          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={72} radius={radius.md} />)}
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={72} radius={radius.button} />)}
         </View>
       </Screen>
     )
@@ -321,7 +321,7 @@ export default function EstimatorGradesScreen() {
                     backgroundColor: active ? t.accentSurface : pressed || hovered ? t.surface2 : t.surface,
                     borderWidth: active ? 2 : 1,
                     borderColor: active ? t.accent : t.border,
-                    borderRadius: radius.md, borderCurve: 'continuous',
+                    borderRadius: radius.button, borderCurve: 'continuous',
                   },
                   focusRing(t.focusRing, focused),
                 ]
@@ -330,7 +330,7 @@ export default function EstimatorGradesScreen() {
               <View
                 {...decorative}
                 style={{
-                  width: 20, height: 20, borderRadius: radius.pill,
+                  width: 20, height: 20, borderRadius: radius.capsule,
                   borderWidth: active ? 6 : 2,
                   borderColor: active ? t.accent : t.inputBorder,
                   backgroundColor: t.surface,

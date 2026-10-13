@@ -13,7 +13,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { View, Text, TextInput, ActivityIndicator } from 'react-native'
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { supabase } from '../../services/supabase'
 import { updatePassword, isValidPassword } from '../../services/webAuth'
 import { checkPwnedPassword, BREACHED_PASSWORD_MESSAGE } from '../../services/pwnedPasswords'
@@ -103,7 +103,7 @@ export default function ResetPasswordScreen() {
       <AuthLayout>
         <View style={{ alignItems: 'center', gap: spacing.lg }}>
           <ActivityIndicator size="large" color={t.accentText} />
-          <Text accessibilityLiveRegion="polite" style={textStyle('body', t.textSecondary)}>
+          <Text accessibilityLiveRegion="polite" style={iosTextStyle('body', t.textSecondary)}>
             Checking your reset link…
           </Text>
         </View>
@@ -117,8 +117,8 @@ export default function ResetPasswordScreen() {
         <View style={{ gap: spacing.xl }}>
           <BrandBlock />
           <View style={{ gap: spacing.sm }}>
-            <Text {...heading(2)} style={textStyle('headline', t.textPrimary)}>This reset link has expired</Text>
-            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+            <Text {...heading(2)} style={iosTextStyle('title3', t.textPrimary)}>This reset link has expired</Text>
+            <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
               Reset links work once and only for a short time. Go back to sign in and tap
               “Forgot password?” to get a new one.
             </Text>
@@ -135,7 +135,7 @@ export default function ResetPasswordScreen() {
         <View style={{ gap: spacing.xl }}>
           <BrandBlock />
           <StatusPanel tone="success" title="Password updated">
-            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+            <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
               Your new password is set and you&apos;re signed in. Use it the next time you sign in to Iskotify.
             </Text>
           </StatusPanel>
@@ -150,7 +150,7 @@ export default function ResetPasswordScreen() {
       <View style={{ gap: spacing.xl }}>
         <BrandBlock />
         <View style={{ gap: spacing.lg }}>
-          <Text {...heading(2)} style={textStyle('headline', t.textPrimary)}>Choose a new password</Text>
+          <Text {...heading(2)} style={iosTextStyle('title3', t.textPrimary)}>Choose a new password</Text>
           <TextField
             label="New password"
             value={password}
@@ -189,7 +189,7 @@ export default function ResetPasswordScreen() {
 
           {formError ? (
             <StatusPanel tone="danger" title="Couldn't update your password">
-              <Text accessibilityRole="alert" style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={2}>
+              <Text accessibilityRole="alert" style={iosTextStyle('footnote', t.textPrimary)} maxFontSizeMultiplier={2}>
                 {formError}
               </Text>
             </StatusPanel>

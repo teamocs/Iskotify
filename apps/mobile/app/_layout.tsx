@@ -81,7 +81,7 @@ export default function RootLayout() {
             }}>
               <Image
                 source={require('../assets/images/icon.png')}
-                style={{ width: 80, height: 80, borderRadius: radius.xl }}
+                style={{ width: 80, height: 80, borderRadius: radius.card }}
               />
             </View>
           )}
@@ -114,7 +114,7 @@ export default function RootLayout() {
           }}>
             <Image
               source={require('../assets/images/icon.png')}
-              style={{ width: 80, height: 80, borderRadius: radius.xl }}
+              style={{ width: 80, height: 80, borderRadius: radius.card }}
             />
           </View>
         )}

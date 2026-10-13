@@ -7,7 +7,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTim
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { motion, radius, spacing, textStyle } from '../../theme/tokens'
+import { motion, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { useBreakpoint, type Breakpoint } from '../../hooks/useBreakpoint'
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
@@ -24,7 +24,7 @@ const NativeKeyboardAvoidingView: React.ComponentType<{ behavior: 'padding'; sty
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
 /** The exit: a quick ease-out (Reduce Motion: the 160ms crossfade). */
-export const SHEET_EXIT_MS = 220
+export const SHEET_EXIT_MS = motion.duration.sheetExit
 
 /** How far a centred dialog rises as it appears (a bottom sheet travels the whole screen). */
 const DIALOG_RISE = spacing.xxl
@@ -196,7 +196,7 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
                 paddingLeft: spacing.xl, paddingRight: spacing.sm, paddingTop: spacing.sm,
               }}
             >
-              <Text ref={titleRef} nativeID={titleId} accessibilityRole="header" style={[textStyle('headline', t.textPrimary), { flex: 1 }]}>
+              <Text ref={titleRef} nativeID={titleId} accessibilityRole="header" style={[iosTextStyle('title3', t.textPrimary), { flex: 1 }]}>
                 {title}
               </Text>
               <Pressable

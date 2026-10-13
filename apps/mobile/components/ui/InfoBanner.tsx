@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from './a11y'
 
 interface Props {
@@ -26,7 +26,7 @@ export function InfoBanner({ icon, message, actionLabel, onAction, tone = 'accen
         backgroundColor: bg,
         borderWidth: 1,
         borderColor: t.border,
-        borderRadius: radius.lg,
+        borderRadius: radius.group,
         borderCurve: 'continuous',
         paddingLeft: spacing.lg,
         paddingRight: actionLabel && onAction ? spacing.xs : spacing.lg,
@@ -44,7 +44,7 @@ export function InfoBanner({ icon, message, actionLabel, onAction, tone = 'accen
         </View>
       ) : null}
       <Text
-        style={[textStyle('bodySm', t.textSecondary), { flex: 1, paddingVertical: spacing.sm }]}
+        style={[iosTextStyle('footnote', t.textSecondary), { flex: 1, paddingVertical: spacing.sm }]}
         maxFontSizeMultiplier={2}
       >
         {message}
@@ -63,7 +63,7 @@ export function InfoBanner({ icon, message, actionLabel, onAction, tone = 'accen
                 paddingHorizontal: spacing.md,
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: radius.md,
+                borderRadius: radius.button,
                 borderCurve: 'continuous',
                 backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
               },
@@ -71,7 +71,7 @@ export function InfoBanner({ icon, message, actionLabel, onAction, tone = 'accen
             ]
           }}
         >
-          <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={2}>{actionLabel}</Text>
+          <Text style={{ ...iosTextStyle('footnote', t.accentText), ...weight('600') }} maxFontSizeMultiplier={2}>{actionLabel}</Text>
         </Pressable>
       ) : null}
     </View>

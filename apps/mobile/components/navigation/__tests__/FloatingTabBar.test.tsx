@@ -257,23 +257,45 @@ describe('FloatingTabBar: lens and motion', () => {
     expect(StyleSheet.flatten(screen.getByTestId('tab-bar-tablist').props.style).width).toBe(326)
   })
 
-  it('springs the lens index (bouncy) and the morph (smooth)', () => {
+  // Owner feedback (2026-10-13): no sideways bounce, shorter morphs.
+  it('slides the lens on snappy (never bouncy) and morphs over a 260ms ease-out with a 140ms crossfade', () => {
     const spring = jest.spyOn(Reanimated, 'withSpring')
+    const timing = jest.spyOn(Reanimated, 'withTiming')
     const { ctx, rerenderWith } = renderBar(makeProps('index'))
     layoutRow()
     rerenderWith(makeProps('explore'))
-    expect(spring).toHaveBeenCalledWith(2, motion.spring.bouncy)
+    expect(spring).toHaveBeenCalledWith(2, motion.spring.snappy)
+    expect(spring).not.toHaveBeenCalledWith(expect.anything(), motion.spring.bouncy)
     spring.mockClear()
+    timing.mockClear()
     act(() => ctx.current!.setMinimized(true))
     // The capsule shrinks to the 62pt pill; the search circle stays 62.
-    expect(spring).toHaveBeenCalledWith(62, motion.spring.smooth)
-    expect(spring).not.toHaveBeenCalledWith(326, motion.spring.smooth)
-    spring.mockClear()
+    expect(timing).toHaveBeenCalledWith(62, expect.objectContaining({ duration: motion.duration.bar }))
+    expect(timing).toHaveBeenCalledWith(1, { duration: motion.duration.fade })
+    expect(spring).not.toHaveBeenCalled()
+    timing.mockClear()
     act(() => ctx.current!.setMinimized(false))
-    expect(spring).toHaveBeenCalledWith(326, motion.spring.smooth)
+    expect(timing).toHaveBeenCalledWith(326, expect.objectContaining({ duration: 260 }))
   })
 
-  it('Reduce Motion: the lens jumps and the morph is a 160ms crossfade', () => {
+  it('an interrupted morph only takes the time its remaining distance needs', () => {
+    // Hold the minimize halfway (326 to 62 stops at 194), then expand again.
+    const timing = jest.spyOn(Reanimated, 'withTiming').mockImplementation(((to: number) => (to === 62 ? 194 : to)) as never)
+    const { ctx } = renderBar(makeProps('index'))
+    layoutRow()
+    act(() => ctx.current!.setMinimized(true))
+    timing.mockClear()
+    act(() => ctx.current!.setMinimized(false))
+    const call = timing.mock.calls.find(c => c[0] === 326)!
+    expect((call[1] as { duration: number }).duration).toBe(Math.round(motion.duration.bar * (326 - 194) / (326 - 62)))
+  })
+
+  it('rapid mode changes retarget a running crossfade instead of blinking it to 0', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '../FloatingTabBar.tsx'), 'utf8')
+    expect(src).toMatch(/if \(fade\.value >= 1\) fade\.value = 0/)
+  })
+
+  it('Reduce Motion: the lens jumps and the morph is a 120ms crossfade', () => {
     mockCaps.reduceMotion = true
     const spring = jest.spyOn(Reanimated, 'withSpring')
     const timing = jest.spyOn(Reanimated, 'withTiming')
@@ -282,7 +304,7 @@ describe('FloatingTabBar: lens and motion', () => {
     rerenderWith(makeProps('explore'))
     act(() => ctx.current!.setMinimized(true))
     expect(spring).not.toHaveBeenCalled()
-    expect(timing).toHaveBeenCalledWith(1, { duration: 160 })
+    expect(timing).toHaveBeenCalledWith(1, { duration: 120 })
   })
 })
 

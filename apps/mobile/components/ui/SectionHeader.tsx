@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { weight, spacing, iosTextStyle } from '../../theme/tokens'
 
 interface Props {
   title: string
@@ -17,7 +17,7 @@ export function SectionHeader({ title, subtitle, actionLabel, onAction }: Props)
   return (
     <View style={{ marginBottom: spacing.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-        <Text accessibilityRole="header" style={[textStyle('titleSm', t.textPrimary), { flexShrink: 1 }]}>{title}</Text>
+        <Text accessibilityRole="header" style={[iosTextStyle('headline', t.textPrimary), { flexShrink: 1 }]}>{title}</Text>
         {actionLabel && onAction ? (
           <Pressable
             onPress={onAction}
@@ -25,12 +25,12 @@ export function SectionHeader({ title, subtitle, actionLabel, onAction }: Props)
             accessibilityRole="button"
             style={({ pressed }) => [{ minHeight: 32, justifyContent: 'center' }, pressed ? { opacity: 0.6 } : null]}
           >
-            <Text style={textStyle('label', t.accentText)}>{actionLabel}</Text>
+            <Text style={{ ...iosTextStyle('footnote', t.accentText), ...weight('600') }}>{actionLabel}</Text>
           </Pressable>
         ) : null}
       </View>
       {subtitle ? (
-        <Text style={[textStyle('caption', t.textTertiary), { marginTop: 2 }]} maxFontSizeMultiplier={1.4}>
+        <Text style={[iosTextStyle('caption', t.textTertiary), { marginTop: 2 }]} maxFontSizeMultiplier={1.4}>
           {subtitle}
         </Text>
       ) : null}

@@ -96,7 +96,7 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
 
   const frame = {
     backgroundColor: noteSurface(t, note.color),
-    borderRadius: radius.lg,
+    borderRadius: radius.group,
     borderCurve: 'continuous' as const,
     borderWidth: selected ? 2 : 1,
     borderColor: selected ? t.accent : t.border,
@@ -128,7 +128,7 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
               minHeight: 44,
               padding: spacing.lg,
               gap: spacing.sm,
-              borderRadius: radius.lg,
+              borderRadius: radius.group,
               backgroundColor: pressed || hovered ? t.surfaceSubtle : 'transparent',
             },
             focusRing(t.focusRing, focused),

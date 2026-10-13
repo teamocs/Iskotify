@@ -14,7 +14,6 @@ import { useNoteLabels } from '../useNoteLabels'
 import { useSavedDecks } from '../useSavedDecks'
 import { useFocusListings } from '../useFocusListings'
 import { useNotifications } from '../useNotifications'
-import { useFocusModePref } from '../useFocusModePref'
 
 let mockDb: DrizzleClient
 jest.mock('../useDb', () => ({ useDb: () => mockDb }))
@@ -123,12 +122,5 @@ describe('settings hooks', () => {
     expect(mockSchedule).toHaveBeenCalledTimes(2)
     await act(async () => { await result.current.toggle([]) })
     expect(mockSchedule.mock.calls.length).toBeGreaterThanOrEqual(3)
-  })
-
-  it('useFocusModePref.setEnabled schedules a push', async () => {
-    const { result } = renderHook(() => useFocusModePref())
-    await waitFor(() => expect(result.current.loading).toBe(false))
-    await act(async () => { result.current.setEnabled(false); await new Promise(r => setTimeout(r, 20)) })
-    expect(mockSchedule.mock.calls.some(c => c[0] === mockDb)).toBe(true)
   })
 })

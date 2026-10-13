@@ -17,7 +17,7 @@ import { usePathname, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Gear1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { SEARCH_DESTINATION, TAB_DESTINATIONS, activeDestination } from '../navigation/destinations'
 import { Avatar } from '../ui/Avatar'
 import { useProfileName } from '../../hooks/useProfileName'
@@ -54,7 +54,7 @@ function SidebarLink({ label, sublabel, active, onPress, leading }: ItemProps) {
           gap: spacing.md,
           minHeight: 44,
           paddingHorizontal: spacing.md,
-          borderRadius: radius.md,
+          borderRadius: radius.button,
           borderCurve: 'continuous',
           backgroundColor: active ? t.accentSurface : hovered ? t.surface2 : 'transparent',
           opacity: pressed ? 0.75 : 1,
@@ -64,13 +64,13 @@ function SidebarLink({ label, sublabel, active, onPress, leading }: ItemProps) {
       {leading}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
-          style={[textStyle('body', color), weight(active ? '700' : '500')]}
+          style={[iosTextStyle('body', color), weight(active ? '700' : '500')]}
           numberOfLines={1}
         >
           {label}
         </Text>
         {sublabel ? (
-          <Text style={textStyle('caption', t.textSecondary)} numberOfLines={1}>{sublabel}</Text>
+          <Text style={iosTextStyle('caption', t.textSecondary)} numberOfLines={1}>{sublabel}</Text>
         ) : null}
       </View>
     </Pressable>
@@ -109,7 +109,7 @@ export function SidebarNav() {
           accessibilityIgnoresInvertColors
           accessible={false}
         />
-        <Text style={textStyle('headline', t.textPrimary)}>Iskotify</Text>
+        <Text style={iosTextStyle('title3', t.textPrimary)}>Iskotify</Text>
       </View>
 
       <View style={{ gap: spacing.xs }}>

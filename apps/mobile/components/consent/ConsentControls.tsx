@@ -1,7 +1,7 @@
 import { View } from 'react-native'
 import { router } from 'expo-router'
 import { spacing } from '../../theme/tokens'
-import { ChoiceRow } from '../onboarding/ChoiceRow'
+import { ChoiceGroup, ChoiceRow } from '../onboarding/ChoiceRow'
 import { Button } from '../ui/Button'
 import type { AgeBand } from '../../utils/consent'
 
@@ -31,7 +31,7 @@ export function ConsentControls({ value, onChange }: Props) {
 
   return (
     <View style={{ gap: spacing.xxl }}>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Your age" style={{ gap: spacing.sm }}>
+      <ChoiceGroup accessibilityRole="radiogroup" accessibilityLabel="Your age">
         <ChoiceRow
           mode="radio"
           label="I'm 18 or older"
@@ -46,7 +46,7 @@ export function ConsentControls({ value, onChange }: Props) {
           selected={value.ageBand === 'minor'}
           onPress={() => setAge('minor')}
         />
-      </View>
+      </ChoiceGroup>
 
       <View style={{ gap: spacing.sm }}>
         <ChoiceRow

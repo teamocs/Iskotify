@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { Button } from '../ui/Button'
 import { decorative } from '../ui/a11y'
 import { TOUR_LENGTH, tourPositionLabel } from './tourFlow'
@@ -28,7 +28,7 @@ export function TourControls({ index, onBack, onNext, nextLabel }: Props) {
             <View
               key={i}
               style={{
-                height: 8, width: i === index ? 24 : 8, borderRadius: radius.pill,
+                height: 8, width: i === index ? 24 : 8, borderRadius: radius.capsule,
                 backgroundColor: i === index ? t.accentText : i < index ? t.accentBorder : t.inputBorder,
                 opacity: i === index ? 1 : 0.7,
               }}
@@ -38,7 +38,7 @@ export function TourControls({ index, onBack, onNext, nextLabel }: Props) {
         <Text
           accessibilityLiveRegion="polite"
           aria-live="polite"
-          style={textStyle('label', t.textSecondary)}
+          style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }}
           maxFontSizeMultiplier={1.6}
         >
           {tourPositionLabel(index)}

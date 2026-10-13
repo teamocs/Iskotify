@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AccessibilityInfo, Animated, BackHandler, Easing, PanResponder, Platform, Pressable, ScrollView, Text, View,
-  findNodeHandle,
+  AccessibilityInfo, BackHandler, PanResponder, Platform, ScrollView, Text, View, findNodeHandle,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../hooks/useDb'
 import { useTheme } from '../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../theme/tokens'
+import { radius, spacing } from '../theme/tokens'
 import { useBreakpoint, pagePadding } from '../hooks/useBreakpoint'
-import { useReducedMotion } from '../hooks/useReducedMotion'
 import { userSettings } from '../db/schema'
-import { focusRing, type WebPressableState } from '../components/ui/a11y'
+import { Button } from '../components/ui/Button'
+import { PageTransition } from '../components/ui/PageTransition'
 import { TourVisual } from '../components/walkthrough/TourVisuals'
 import { TourCard } from '../components/walkthrough/TourCard'
 import { TourControls } from '../components/walkthrough/TourControls'
@@ -44,7 +43,6 @@ export default function TourScreen() {
   const db = useDb()
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
-  const reduced = useReducedMotion()
   const params = useLocalSearchParams<{ from?: string }>() ?? {}
   const source = parseTourSource(params.from)
 
@@ -71,10 +69,10 @@ export default function TourScreen() {
     return () => { alive = false }
   }, [db])
 
-  // Card change: a short directional slide (skipped under reduced motion), and
-  // on native, screen-reader focus moves to the new title.
-  const anim = useRef(new Animated.Value(1)).current
-  const dirRef = useRef(1)
+  // Card change: PageTransition cross-fades the card in over 200ms with an 8pt slide (a
+  // crossfade under Reduce Motion), and on native, screen-reader focus moves
+  // to the new title.
+  const dirRef = useRef<1 | -1>(1)
   const go = useCallback((delta: 1 | -1) => {
     setIndex(i => {
       const n = Math.max(0, Math.min(TOUR_LENGTH - 1, i + delta))
@@ -85,19 +83,13 @@ export default function TourScreen() {
   const isFirstRender = useRef(true)
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }
-    if (!reduced) {
-      anim.setValue(0)
-      Animated.timing(anim, {
-        toValue: 1, duration: 260, easing: Easing.out(Easing.exp), useNativeDriver: Platform.OS !== 'web',
-      }).start()
-    }
     if (Platform.OS === 'web') return
     const id = setTimeout(() => {
       const node = titleRef.current ? findNodeHandle(titleRef.current) : null
       if (node) AccessibilityInfo.setAccessibilityFocus(node)
     }, 120)
     return () => clearTimeout(id)
-  }, [index, reduced, anim])
+  }, [index])
 
   const leave = useCallback((action: 'skip' | 'finish' | string) => {
     const exit = tourExit(source, action)
@@ -161,37 +153,18 @@ export default function TourScreen() {
 
   const compact = bp !== 'expanded'
   const gutter = pagePadding(bp)
-  const slide = {
-    opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
-    transform: [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [dirRef.current * 24, 0] }) }],
-  }
   const lead = card.id === 'welcome' && firstName ? `Hi ${firstName}! ${card.body[0]}` : undefined
   const takeMeThere = card.href ? () => leave(card.href!) : undefined
-  const nextLabel = last ? 'Tara, simulan na natin' : 'Next'
+  const nextLabel = last ? "Let's get started" : 'Next'
 
   const skip = !last ? (
-    <Pressable
-      onPress={() => leave('skip')}
-      accessibilityRole="button"
-      accessibilityLabel="Skip the tour"
-      hitSlop={4}
-      style={(state) => {
-        const { pressed, hovered, focused } = state as WebPressableState
-        return [{
-          minHeight: 44, minWidth: 44, paddingHorizontal: spacing.md, borderRadius: radius.md,
-          alignItems: 'center', justifyContent: 'center',
-          backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
-        }, focusRing(t.focusRing, focused)]
-      }}
-    >
-      <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={1.6}>Skip</Text>
-    </Pressable>
-  ) : <View style={{ height: 44 }} />
+    <Button label="Skip" accessibilityLabel="Skip the tour" variant="ghost" size="sm" onPress={() => leave('skip')} />
+  ) : <View style={{ minHeight: 44 }} />
 
   const words = (
-    <Animated.View style={slide}>
+    <PageTransition pageKey={index} direction={dirRef.current}>
       <TourCard ref={titleRef} card={card} lead={lead} onTakeMeThere={takeMeThere} />
-    </Animated.View>
+    </PageTransition>
   )
   const controls = <TourControls index={index} onBack={back} onNext={next} nextLabel={nextLabel} />
 
@@ -204,7 +177,7 @@ export default function TourScreen() {
             {skip}
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg }} {...swipe}>
-            <Animated.View style={slide}><TourVisual id={card.id} compact /></Animated.View>
+            <PageTransition pageKey={index} direction={dirRef.current}><TourVisual id={card.id} compact /></PageTransition>
             {words}
           </ScrollView>
           <View style={{ paddingBottom: spacing.md, paddingTop: spacing.sm }}>{controls}</View>
@@ -223,11 +196,11 @@ export default function TourScreen() {
           {...swipe}
           style={{
             width: '100%', maxWidth: 1040, alignSelf: 'center', flexDirection: 'row', gap: spacing.xxxl,
-            backgroundColor: t.surface, borderRadius: radius.xxl, borderCurve: 'continuous',
+            backgroundColor: t.surface, borderRadius: radius.sheet, borderCurve: 'continuous',
             padding: spacing.xxxl, boxShadow: t.shadowMd,
           }}
         >
-          <Animated.View style={[{ flex: 11, minWidth: 0 }, slide]}><TourVisual id={card.id} compact={false} /></Animated.View>
+          <PageTransition pageKey={index} direction={dirRef.current} style={{ flex: 11, minWidth: 0 }}><TourVisual id={card.id} compact={false} /></PageTransition>
           <View style={{ flex: 9, minWidth: 0, justifyContent: 'space-between', gap: spacing.xxl }}>
             <View style={{ alignItems: 'flex-end', marginRight: -spacing.md, marginTop: -spacing.md }}>{skip}</View>
             <View style={{ flex: 1, justifyContent: 'center' }}>{words}</View>

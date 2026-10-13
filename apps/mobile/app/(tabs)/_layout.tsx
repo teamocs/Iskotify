@@ -7,6 +7,7 @@ import { useTabShell } from '../../components/navigation/useTabShell'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { SidebarNav } from '../../components/web/SidebarNav'
+import { motion } from '../../theme/tokens'
 
 /**
  * Android and web: the floating bar. iOS has its own layout with the system
@@ -58,7 +59,14 @@ export default function TabLayout() {
             {syncBanner}
             <Tabs
               tabBar={isDesktopWeb ? () => null : (props) => <FloatingTabBar {...props} />}
-              screenOptions={{ headerShown: false, animation: isDesktopWeb ? 'none' : 'shift' }}
+              // Tab content only crossfades, briefly (owner feedback 2026-10-13:
+              // no shift or scale on a tab change).
+              screenOptions={{
+                headerShown: false,
+                animation: isDesktopWeb ? 'none' : 'fade',
+                // Desktop web has no tab animation, so no spec either.
+                ...(isDesktopWeb ? null : { transitionSpec: { animation: 'timing' as const, config: { duration: motion.duration.fade } } }),
+              }}
               screenLayout={({ children, route }) => <SceneBlurTarget routeKey={route.key}>{children}</SceneBlurTarget>}
             >
               {TAB_SCREENS}

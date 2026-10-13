@@ -81,7 +81,7 @@ export function QuestionCard({
                 return [
                   {
                     minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-                    paddingHorizontal: spacing.md, borderRadius: radius.pill,
+                    paddingHorizontal: spacing.md, borderRadius: radius.capsule,
                     backgroundColor: pressed ? t.surface2 : 'transparent',
                   },
                   focusRing(t.focusRing, focused),

@@ -166,3 +166,14 @@ export function pickFeatured<T extends FeaturableListing>(
   const rank = (l: T) => (status?.(l) === 'eligible' ? 0 : 1)
   return [...open].sort((a, b) => rank(a) - rank(b) || a.deadline! - b.deadline!)[0] ?? null
 }
+
+/**
+ * The exam's practice number as a fact, never a verdict (brandbook §5): one
+ * neutral badge whatever the value, named for what it measures. The best mock
+ * score when there is one, else the accuracy on that exam's practice items.
+ */
+export function practiceScoreBadge(mockBest: number | undefined, accuracy: number | undefined): BadgeSpec | null {
+  if (mockBest != null) return { label: `Best mock ${mockBest}%`, tone: 'neutral' }
+  if (accuracy != null) return { label: `Practice accuracy ${accuracy}%`, tone: 'neutral' }
+  return null
+}
