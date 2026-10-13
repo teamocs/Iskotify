@@ -120,11 +120,17 @@ describe('TabLayout across the desktop breakpoint', () => {
     expect(renderTabBar().getByText('bottom-tab-bar')).toBeTruthy()
   })
 
-  it('Android: each scene sits in a BlurTargetView so the bar glass can blur it', () => {
+  it('Android API 31+: each scene sits in a BlurTargetView so the bar glass can blur it', () => {
     Platform.OS = 'android'
-    render(<TabLayout />)
-    const { UNSAFE_root } = render(<>{mockScreenLayout?.({ children: <Text>scene</Text>, route: { key: 'k', name: 'index' } })}</>)
-    expect(UNSAFE_root.findAll((n: any) => n.type?.displayName === 'BlurTargetView')).not.toHaveLength(0)
+    const version = Object.getOwnPropertyDescriptor(Platform, 'Version')
+    Object.defineProperty(Platform, 'Version', { value: 31, configurable: true, writable: true })
+    try {
+      render(<TabLayout />)
+      const { UNSAFE_root } = render(<>{mockScreenLayout?.({ children: <Text>scene</Text>, route: { key: 'k', name: 'index' } })}</>)
+      expect(UNSAFE_root.findAll((n: any) => n.type?.displayName === 'BlurTargetView')).not.toHaveLength(0)
+    } finally {
+      if (version) Object.defineProperty(Platform, 'Version', version)
+    }
   })
 
   it('web and iOS: scenes are not wrapped (they blur the backdrop natively)', () => {
