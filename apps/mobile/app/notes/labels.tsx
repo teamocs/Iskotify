@@ -1,20 +1,22 @@
 import { useState } from 'react'
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
 import { Stack } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bookmark1Outlined, PlusOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing } from '../../theme/tokens'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { confirmAction } from '../../utils/confirmAction'
 import { Screen } from '../../components/ui/Screen'
-import { PageTitle } from '../../components/ui/PageTitle'
 import { Card } from '../../components/ui/Card'
+import { Text } from '../../components/ui/Text'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
 import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { heading } from '../../components/ui/a11y'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
+import { LargeTitleHeader } from '../../components/navigation/LargeTitleHeader'
 
 export default function LabelsScreen() {
   const { theme: t } = useTheme()
@@ -68,7 +70,9 @@ export default function LabelsScreen() {
   return (
     <Screen header={<DetailTopBar bare fallbackHref="/notes" />}>
       <Stack.Screen options={{ headerShown: false }} />
-      <PageTitle title="Labels" lead="Group notes by subject or exam. Add labels to a note from its toolbar." />
+      <View style={{ marginBottom: spacing.lg }}>
+        <LargeTitleHeader collapses={false} title="Labels" subtitle="Group notes by subject or exam. Add labels to a note from its toolbar." />
+      </View>
 
       <Card style={{ gap: spacing.md }}>
         <TextField
@@ -90,7 +94,7 @@ export default function LabelsScreen() {
       </Card>
 
       <View style={{ marginTop: spacing.xxl }}>
-        <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
+        <Text role="headline" {...heading(2)} style={{ marginBottom: spacing.sm }}>
           Your labels
         </Text>
         {labels.length === 0 ? (
@@ -100,46 +104,39 @@ export default function LabelsScreen() {
             body="Add one above, then tag notes with it from the note toolbar."
           />
         ) : (
-          <Card padded={false}>
-            {labels.map((label, index) => (
-              <View
-                key={label.id}
-                style={{
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.sm,
-                  borderTopWidth: index > 0 ? 1 : 0,
-                  borderTopColor: t.divider,
-                }}
-              >
-                {editingId === label.id ? (
-                  <View style={{ gap: spacing.sm, paddingVertical: spacing.sm }}>
-                    <TextField
-                      label="Label name"
-                      value={editingName}
-                      onChangeText={(v) => { setEditingName(v); if (renameError) setRenameError(undefined) }}
-                      onSubmitEditing={() => void handleRename(label.id)}
-                      autoFocus
-                      returnKeyType="done"
-                      error={renameError}
-                      maxLength={40}
-                    />
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-                      <Button size="sm" variant="secondary" label="Save" accessibilityLabel="Save label name" onPress={() => void handleRename(label.id)} />
-                      <Button size="sm" variant="ghost" label="Cancel" accessibilityLabel="Cancel renaming" onPress={() => setEditingId(null)} />
+          <InsetGroup inset={false} testID="labels-list">
+            {labels.map(label => (
+              editingId === label.id ? (
+                <View key={label.id} style={{ gap: spacing.sm, padding: spacing.lg }}>
+                  <TextField
+                    label="Label name"
+                    value={editingName}
+                    onChangeText={(v) => { setEditingName(v); if (renameError) setRenameError(undefined) }}
+                    onSubmitEditing={() => void handleRename(label.id)}
+                    autoFocus
+                    returnKeyType="done"
+                    error={renameError}
+                    maxLength={40}
+                  />
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                    <Button size="sm" variant="secondary" label="Save" accessibilityLabel="Save label name" onPress={() => void handleRename(label.id)} />
+                    <Button size="sm" variant="ghost" label="Cancel" accessibilityLabel="Cancel renaming" onPress={() => setEditingId(null)} />
+                  </View>
+                </View>
+              ) : (
+                <InsetRow
+                  key={label.id}
+                  title={label.name}
+                  trailing={
+                    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                      <Button size="sm" variant="ghost" label="Rename" accessibilityLabel={`Rename ${label.name}`} onPress={() => startRename(label.id, label.name)} />
+                      <Button size="sm" variant="ghost" label="Delete" accessibilityLabel={`Delete ${label.name}`} onPress={() => handleDelete(label.id, label.name)} />
                     </View>
-                  </View>
-                ) : (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, minHeight: 44 }}>
-                    <Text style={[textStyle('body', t.textPrimary), { flex: 1, minWidth: 120 }]} maxFontSizeMultiplier={2}>
-                      {label.name}
-                    </Text>
-                    <Button size="sm" variant="ghost" label="Rename" accessibilityLabel={`Rename ${label.name}`} onPress={() => startRename(label.id, label.name)} />
-                    <Button size="sm" variant="ghost" label="Delete" accessibilityLabel={`Delete ${label.name}`} onPress={() => handleDelete(label.id, label.name)} />
-                  </View>
-                )}
-              </View>
+                  }
+                />
+              )
             ))}
-          </Card>
+          </InsetGroup>
         )}
       </View>
     </Screen>

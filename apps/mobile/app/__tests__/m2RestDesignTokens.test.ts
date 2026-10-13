@@ -1,7 +1,8 @@
 // Redesign M2 guard for the remaining screens (first run, auth, settings,
 // help/about/privacy/terms) and the shared primitives they lean on. Same contract as
 // app/(tabs)/__tests__/m2DesignTokens.test.ts: every colour through useTheme(),
-// every text size through a textStyle role, no hard-coded font names, and
+// every text size through a type role (P4: the iOS roles; the account screens'
+// legacy names are banned by p4AccountDesignLint.test.ts), no hard-coded font names, and
 // drawn icons (Lineicons), never emoji or a Unicode glyph standing in for one.
 // State goes through aria-* props: react-native-web 0.21 ignores
 // accessibilityState, so a screen that only sets it is silent on the web build.
@@ -27,6 +28,9 @@ const FILES = [
   'app/about.tsx',
   'app/privacy.tsx',
   'app/terms.tsx',
+  'app/upgrade.tsx',
+  'components/premium/UpgradeCard.tsx',
+  'components/DeleteAccountSheet.tsx',
   'components/auth/AuthLayout.tsx',
   'components/onboarding/StepShell.tsx',
   'components/onboarding/ChoiceRow.tsx',

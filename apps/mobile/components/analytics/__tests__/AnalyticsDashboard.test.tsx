@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react-native'
 import { AnalyticsDashboard } from '../AnalyticsDashboard'
 import { aria } from '../../../test-utils/aria'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
 
 // Redesign M2: Progress owns readiness and analytics. The dashboard is on the
 // shared primitives (StatNumber, FilterChip, Card, Skeleton / EmptyState /
@@ -26,6 +27,7 @@ jest.mock('../../../hooks/useFocusListings', () => ({
     focusListings: [
       { slug: 'upcat', title: 'UPCAT 2026', priority: 1 },
       { slug: 'school:x', title: 'Some School', priority: 2 },
+      { slug: 'acet', title: 'ACET 2026', priority: 3 },
     ],
   }),
 }))
@@ -41,6 +43,7 @@ jest.mock('../../../hooks/useSubjectReadiness', () => ({
 
 const week = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((dayLabel, i) => ({
   dayLabel, accuracy: i === 2 ? 80 : i === 6 ? 60 : null, sessionCount: i === 2 || i === 6 ? 1 : 0,
+  minutes: i === 2 ? 12 : i === 6 ? 5 : 0,
 }))
 
 const data = {
@@ -56,7 +59,11 @@ const data = {
   avgTime: { overallAvgMs: 42_000, overallCount: 30, bySubject: [{ subject: 'Math', avgMs: 65_000, count: 10 }] },
   mostMissedTopics: [{ groupKey: 'g1', label: 'Fractions', wrongCount: 7, skipCount: 2, missRate: 65, destination: { topicId: 't9', listingSlug: 'upcat' } }],
   accuracyTrend: [{ weekStart: Date.UTC(2026, 7, 1), accuracy: 50 }, { weekStart: Date.UTC(2026, 7, 8), accuracy: 70 }],
-  mockAttemptHistory: [],
+  mockAttemptHistory: [
+    { listingSlug: 'upcat', completedAt: Date.UTC(2026, 8, 10), pct: 35 },
+    { listingSlug: 'upcat', completedAt: Date.UTC(2026, 8, 18), pct: 92 },
+  ],
+  examAccuracy: { upcat: 72 },
   isLoading: false,
   error: false,
   refresh: jest.fn(),
@@ -67,6 +74,17 @@ const readiness = {
   loading: false,
   error: false,
   refresh: jest.fn(),
+}
+
+// Verdicts the owner removed (2026-10-13): no pass/fail bands, no pace status.
+const VERDICT = /\b(?:Top tier|Competitive|Developing|Foundational|Below cut-?off|Above cut-?off|Excellent|Needs work|Poor|Strong|Weak|Getting there|Behind|On pace|On track|Pass(?:ed|ing)?|Fail(?:ed|ing)?)\b/i
+
+/** Every accessibility label and hint on screen. */
+function allLabels(): string {
+  return screen.UNSAFE_root
+    .findAll((n: any) => typeof n.props.accessibilityLabel === 'string' || typeof n.props.accessibilityHint === 'string')
+    .map((n: any) => `${n.props.accessibilityLabel ?? ''} ${n.props.accessibilityHint ?? ''}`)
+    .join(' ')
 }
 
 function allText(): string {
@@ -144,14 +162,17 @@ describe('AnalyticsDashboard (Progress)', () => {
   })
 
   describe('readiness by subject (moved here from Today)', () => {
-    it('lists subjects with a percentage and a word, not colour alone', () => {
+    it('lists subjects as neutral numbers: a percentage and a bar, never a verdict word', () => {
       render(<AnalyticsDashboard />)
       expect(screen.getByRole('header', { name: 'Readiness by subject' })).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'Science, 30%, needs work' })).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'Math, 80%, strong' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Science, 30%' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Math, 80%' })).toBeTruthy()
+      expect(screen.queryByText('needs work')).toBeNull()
+      expect(screen.queryByText('strong')).toBeNull()
+      expect(screen.queryByText('getting there')).toBeNull()
     })
 
-    // A8: too little practice is "Not started", not a 0% "needs work".
+    // A8: too little practice is "Not started", not a 0%.
     it('shows Not started — never 0% — for a subject without enough practice', () => {
       mockReadiness.mockReturnValue({ ...readiness, entries: [{ id: 's-sci', name: 'Science', pct: null }, { id: 's-math', name: 'Math', pct: 80 }] })
       render(<AnalyticsDashboard />)
@@ -159,20 +180,26 @@ describe('AnalyticsDashboard (Progress)', () => {
       expect(screen.queryByRole('button', { name: /Science, 0%/ })).toBeNull()
     })
 
+    it('says a tap practises the subject (not every subject has a diagnostic)', () => {
+      render(<AnalyticsDashboard />)
+      expect(screen.getByText('Lowest first. Tap one to practise it.')).toBeTruthy()
+      expect(screen.queryByText(/take its diagnostic/)).toBeNull()
+    })
+
     it('opens the diagnostic for a UPCAT subtest subject', () => {
       const { router } = require('expo-router')
       render(<AnalyticsDashboard />)
-      fireEvent.press(screen.getByRole('button', { name: 'Science, 30%, needs work' }))
+      fireEvent.press(screen.getByRole('button', { name: 'Science, 30%' }))
       expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?subject=Science')
-      expect(screen.getByRole('button', { name: 'Science, 30%, needs work' }).props.accessibilityHint).toBe('Opens a diagnostic for this subject')
+      expect(screen.getByRole('button', { name: 'Science, 30%' }).props.accessibilityHint).toBe('Opens a diagnostic for this subject')
     })
 
     it('opens any other subject on its own page (the diagnostic would ignore it)', () => {
       const { router } = require('expo-router')
       render(<AnalyticsDashboard />)
-      fireEvent.press(screen.getByRole('button', { name: 'Math, 80%, strong' }))
+      fireEvent.press(screen.getByRole('button', { name: 'Math, 80%' }))
       expect(router.push).toHaveBeenCalledWith('/subjects/s-math')
-      expect(screen.getByRole('button', { name: 'Math, 80%, strong' }).props.accessibilityHint).toBe('Opens this subject\'s topics to practise')
+      expect(screen.getByRole('button', { name: 'Math, 80%' }).props.accessibilityHint).toBe('Opens this subject\'s topics to practise')
     })
 
     it('has its own loading, empty and error states', () => {
@@ -195,11 +222,50 @@ describe('AnalyticsDashboard (Progress)', () => {
     })
   })
 
-  describe('charts', () => {
-    it('shows this week open, with a spoken summary of every day', () => {
+  describe('exam readiness (P4)', () => {
+    it('draws one labelled ring per focused exam (schools excluded) with its percent and name', () => {
       render(<AnalyticsDashboard />)
-      expect(screen.getByRole('header', { name: 'This week' })).toBeTruthy()
-      expect(screen.getByLabelText(/^Accuracy by day\. Sat no practice, Sun no practice, Mon 80%.*Fri 60%$/)).toBeTruthy()
+      expect(screen.getByRole('header', { name: 'Exam readiness' })).toBeTruthy()
+      expect(screen.getAllByTestId('exam-ring')).toHaveLength(2)
+      const upcat = screen.getByRole('image', { name: 'UPCAT 2026, 72% practice accuracy' })
+      expect(within(upcat).getByText('72%')).toBeTruthy()
+      expect(screen.getByRole('image', { name: 'ACET 2026, no practice yet' })).toBeTruthy()
+      expect(screen.queryByRole('image', { name: /Some School/ })).toBeNull()
+    })
+
+    it('shows no pace or status words beside the rings', () => {
+      render(<AnalyticsDashboard />)
+      const card = screen.getByTestId('exam-readiness-card')
+      const words: string[] = []
+      const walk = (n: any): void => {
+        if (n == null) return
+        if (typeof n === 'string') { words.push(n); return }
+        if (Array.isArray(n)) { n.forEach(walk); return }
+        if (n.props?.children !== undefined) walk(n.props.children)
+        if (n.children) walk(n.children)
+      }
+      walk(card)
+      expect(words.join(' ')).not.toMatch(/behind|on pace|ahead|on track/i)
+    })
+  })
+
+  describe('charts', () => {
+    it('shows study time for the week as a labelled 7-day bar chart', () => {
+      render(<AnalyticsDashboard />)
+      expect(screen.getByRole('header', { name: 'Study time' })).toBeTruthy()
+      expect(screen.getByRole('image', { name: /^Study time by day\. Sat no practice, Sun no practice, Mon 12 minutes.*Fri 5 minutes$/ })).toBeTruthy()
+    })
+
+    it("draws today's bar in maroon and the other days in the accent at 30%", () => {
+      const { StyleSheet } = require('react-native')
+      const { lightTheme } = require('../../../theme/tokens')
+      render(<AnalyticsDashboard />)
+      const today = StyleSheet.flatten(screen.getByTestId('study-bar-today').props.style)
+      expect(today.backgroundColor).toBe(lightTheme.accent)
+      expect(today.opacity ?? 1).toBe(1)
+      const other = StyleSheet.flatten(screen.getAllByTestId('study-bar')[0]!.props.style)
+      expect(other.backgroundColor).toBe(lightTheme.accent)
+      expect(other.opacity).toBe(0.3)
     })
 
     it('labels the 8-week trend for screen readers', () => {
@@ -227,11 +293,51 @@ describe('AnalyticsDashboard (Progress)', () => {
       expect(router.push).toHaveBeenCalledWith('/practice/t9?listingSlug=upcat')
     })
 
+    it('mock history lists raw percentages with no band or verdict', () => {
+      render(<AnalyticsDashboard />)
+      const toggle = screen.getByRole('button', { name: /^Mock score history/ })
+      expect(within(toggle).getByText('Latest 92%')).toBeTruthy()
+      fireEvent.press(toggle)
+      expect(screen.getByText('35%')).toBeTruthy()
+      expect(screen.getByText('92%')).toBeTruthy()
+      expect(allText()).not.toMatch(VERDICT)
+    })
+
     it('recent sessions show their accuracy as text', () => {
       render(<AnalyticsDashboard />)
       fireEvent.press(screen.getByRole('button', { name: /^Recent sessions/ }))
       expect(screen.getByText('90%')).toBeTruthy()
       expect(screen.getByText('40%')).toBeTruthy()
+    })
+  })
+
+  describe('no verdicts (P4)', () => {
+    it('no verdict words in any visible text or accessibility label, with every disclosure open', () => {
+      render(<AnalyticsDashboard />)
+      for (const name of [/^Pace/, /^Most common mistakes/, /^Mock score history/, /^Recent sessions/]) {
+        fireEvent.press(screen.getByRole('button', { name }))
+      }
+      expect(allText()).not.toMatch(VERDICT)
+      expect(allLabels()).not.toMatch(VERDICT)
+    })
+
+    it('has at most one primary action', () => {
+      render(<AnalyticsDashboard />)
+      expect(countPrimaryActions(screen.UNSAFE_root)).toBeLessThanOrEqual(1)
+    })
+  })
+
+  describe('habit tiles', () => {
+    it('show only real numbers: streak, sessions, active days and accuracy', () => {
+      render(<AnalyticsDashboard />)
+      expect(screen.getAllByTestId('habit-tile')).toHaveLength(4)
+    })
+
+    it('says the streak covers all exams when an exam filter is on (the other tiles are filtered)', () => {
+      render(<AnalyticsDashboard />)
+      expect(screen.getByLabelText('Day streak: 4 days')).toBeTruthy()
+      fireEvent.press(screen.getByRole('radio', { name: 'UPCAT 2026' }))
+      expect(screen.getByLabelText('Day streak (all exams): 4 days')).toBeTruthy()
     })
   })
 

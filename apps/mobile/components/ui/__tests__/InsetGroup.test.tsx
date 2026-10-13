@@ -224,6 +224,23 @@ describe('InsetRow switch', () => {
     expect(onChange).toHaveBeenLastCalledWith(false)
   })
 
+  // Review: one toggle per tap. The inner Switch only shows the state: it has
+  // no handler of its own and lets touches through to the row.
+  it('the inner Switch cannot toggle on its own: one tap, one toggle', () => {
+    const onChange = jest.fn()
+    render(<InsetRow title="Sounds" switchValue={false} onSwitchChange={onChange} />)
+    const inner = screen.UNSAFE_getByType(Switch)
+    expect(inner.props.onValueChange).toBeUndefined()
+    expect(inner.props.onChange).toBeUndefined()
+    let wrapper = inner.parent
+    while (wrapper && wrapper.props.pointerEvents === undefined) wrapper = wrapper.parent
+    expect(wrapper?.props.pointerEvents).toBe('none')
+    fireEvent(inner, 'valueChange', true)
+    expect(onChange).not.toHaveBeenCalled()
+    fireEvent.press(screen.getByRole('switch', { name: 'Sounds' }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
   it('prefers an explicit hint, and reports off', () => {
     render(<InsetRow title="Sounds" switchValue={false} onSwitchChange={() => {}} accessibilityHint="Plays a tone on a correct answer" />)
     const sw = screen.getByRole('switch', { name: 'Sounds' })

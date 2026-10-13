@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { View, Text, Pressable, Alert, RefreshControl, Platform } from 'react-native'
+import { View, Alert, RefreshControl, Platform } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -17,6 +17,12 @@ import {
   TrendUp1Outlined,
   GraduationCap1Outlined,
   Crown3Outlined,
+  PlusOutlined,
+  Bell1Outlined,
+  Comment1Outlined,
+  Bug1Outlined,
+  Shield2Outlined,
+  ClipboardOutlined,
 } from '@lineiconshq/free-icons'
 import Animated, {
   useAnimatedStyle,
@@ -30,6 +36,8 @@ import { useDb } from '../../hooks/useDb'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
+import { useNotifications } from '../../hooks/useNotifications'
+import { useHomeStats } from '../../hooks/useHomeStats'
 import { exportUserData, importUserData } from '../../services/export'
 import { resetStudyData } from '../../services/resetStudyData'
 import { scholarshipProfileIncomplete, studentProfileFromSettings, type IncomeBracket } from '../../utils/scholarshipMatch'
@@ -43,16 +51,17 @@ import { DeleteAccountSheet } from '../../components/DeleteAccountSheet'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
 import { Card } from '../../components/ui/Card'
-import { SectionHeader } from '../../components/ui/SectionHeader'
-import { ListRow } from '../../components/ui/ListRow'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { ErrorState } from '../../components/ui/ErrorState'
+import { Text } from '../../components/ui/Text'
+import { PressableScale } from '../../components/ui/Pressable'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
-import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { decorative, focusRing, heading } from '../../components/ui/a11y'
+import { layout, radius, spacing } from '../../theme/tokens'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch, pushBeforeSignOut } from '../../services/sync'
 import { usePremium } from '../../hooks/usePremium'
@@ -62,6 +71,7 @@ interface ProfileData {
   fullName: string
   school: string
   gradeLevel: number | null
+  city: string
   googleId: string
   email: string
   listingTitle: string
@@ -72,6 +82,7 @@ const DEFAULT: ProfileData = {
   fullName: 'Student',
   school: '—',
   gradeLevel: null,
+  city: '',
   googleId: '',
   email: '',
   listingTitle: 'No exam selected',
@@ -79,6 +90,12 @@ const DEFAULT: ProfileData = {
 }
 
 type LoadStatus = 'loading' | 'ready' | 'error'
+
+/** 9 → "9:00 AM" (the Settings reminder-time format). */
+function formatHour(hour: number): string {
+  const h12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${h12}:00 ${hour < 12 ? 'AM' : 'PM'}`
+}
 
 /** A 44×44 icon button (header actions, reorder controls). */
 function IconButton({
@@ -93,27 +110,25 @@ function IconButton({
 }) {
   const { theme: t } = useTheme()
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
       aria-disabled={!!disabled}
-      style={(state) => {
-        const { pressed, hovered, focused } = state as WebPressableState
-        return [
-          {
-            width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
-            backgroundColor: (pressed || hovered) && !disabled ? t.surface2 : 'transparent',
-            opacity: disabled ? 0.35 : 1,
-          },
-          focusRing(t.focusRing, focused),
-        ]
-      }}
+      style={({ pressed, hovered, focused }) => [
+        {
+          width: layout.headerButton.hit, height: layout.headerButton.hit, borderRadius: radius.capsule,
+          alignItems: 'center', justifyContent: 'center',
+          backgroundColor: (pressed || hovered) && !disabled ? t.surface2 : 'transparent',
+          opacity: disabled ? 0.35 : 1,
+        },
+        focusRing(t.focusRing, focused),
+      ]}
     >
       <Lineicons icon={icon} size={20} color={tone === 'primary' ? t.textPrimary : t.textSecondary} />
-    </Pressable>
+    </PressableScale>
   )
 }
 
@@ -182,27 +197,27 @@ function FocusListItem({
         style={[
           animStyle,
           {
-            flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 56,
-            borderRadius: radius.md, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: t.divider,
+            flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: layout.rowMinHeight + 12,
+            paddingHorizontal: spacing.sm, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: t.divider,
           },
         ]}
       >
-        <Pressable
+        <PressableScale
           onPress={() => Alert.alert('Reorder', 'Long-press an exam to drag it, or use the up and down buttons.')}
           accessibilityRole="button"
           accessibilityLabel={`Reorder ${item.title}`}
           accessibilityHint="Long-press to drag, or use the up and down buttons"
-          style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 32, height: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center' }}
         >
           <DragHandle color={t.textTertiary} />
-        </Pressable>
+        </PressableScale>
 
         {/* Badge pins itself to flex-start; the wrapper centres it in the row. */}
         <View style={{ alignSelf: 'center' }}>
           <Badge label={`#${item.priority}`} tone="accent" />
         </View>
 
-        <Text style={[textStyle('titleSm', t.textPrimary), { flex: 1, marginLeft: spacing.xs }]} numberOfLines={2} maxFontSizeMultiplier={2}>
+        <Text role="body" numberOfLines={2} style={{ flex: 1, marginLeft: spacing.xs }}>
           {item.title}
         </Text>
 
@@ -252,6 +267,9 @@ export default function ProfileScreen() {
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   const sync = useSyncStatus()
+  // Study reminders: the same master switch as Settings > Notifications.
+  const { focusedListings: reminderListings } = useHomeStats()
+  const { enabled: remindersOn, toggle: toggleReminders, dailyReminderHour } = useNotifications()
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
 
@@ -281,6 +299,7 @@ export default function ProfileScreen() {
           fullName: row.fullName || 'Student',
           school: row.school || '—',
           gradeLevel: row.gradeLevel ?? null,
+          city: row.city ?? '',
           googleId: row.googleId ?? '',
           email: row.email ?? '',
           listingTitle,
@@ -454,16 +473,20 @@ export default function ProfileScreen() {
 
   const signedIn = hasSession || !!profile.googleId
 
-  const rowIcon = (icon: typeof Gear1Outlined, color: string) => <Lineicons icon={icon} size={20} color={color} />
-  const divided = (i: number) => ({ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider })
+  // "Grade 11 · UPLB · Quezon City": only the parts the student has filled in.
+  const subtitle = [
+    profile.gradeLevel ? `Grade ${profile.gradeLevel}` : null,
+    profile.school && profile.school !== '—' ? profile.school : null,
+    profile.city || null,
+  ].filter(Boolean).join(' · ')
 
-  // ── Identity ────────────────────────────────────────────────────────────────
+  // ── Header card ─────────────────────────────────────────────────────────────
   let identity: React.ReactNode
   if (status === 'loading') {
     identity = (
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <Skeleton accessible label="Loading your profile" width={52} height={52} radius={radius.pill} />
+          <Skeleton accessible label="Loading your profile" width={60} height={60} radius={radius.capsule} />
           <View style={{ flex: 1, gap: spacing.sm }}>
             <Skeleton width="60%" height={22} />
             <Skeleton width="40%" height={14} />
@@ -481,14 +504,13 @@ export default function ProfileScreen() {
     identity = (
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <Avatar name={profile.fullName} size={52} />
+          <Avatar name={profile.fullName} size={60} />
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-            <Text style={textStyle('headline', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{profile.fullName}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
-              <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={2}>{profile.school}</Text>
-              {profile.gradeLevel ? <Badge label={`G${profile.gradeLevel}`} tone="accent" /> : null}
-            </View>
-            <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={2}>
+            <Text role="title3" numberOfLines={2} maxFontSizeMultiplier={1.6}>{profile.fullName}</Text>
+            {subtitle ? (
+              <Text role="subheadline" color={t.textSecondary} numberOfLines={2}>{subtitle}</Text>
+            ) : null}
+            <Text role="footnote" color={t.textSecondary} numberOfLines={1}>
               {profile.listingTitle}
             </Text>
           </View>
@@ -504,16 +526,16 @@ export default function ProfileScreen() {
             <View {...decorative}>
               <Lineicons icon={GoogleOutlined} size={18} color={t.textSecondary} />
             </View>
-            <Text style={[textStyle('bodySm', t.textSecondary), { flex: 1 }]} numberOfLines={1} maxFontSizeMultiplier={2}>
+            <Text role="footnote" color={t.textSecondary} numberOfLines={1} style={{ flex: 1 }}>
               {profile.email}
             </Text>
             <View
               style={{
                 backgroundColor: t.successSurface, borderWidth: 1, borderColor: t.successBorder,
-                borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2,
+                borderRadius: radius.capsule, paddingHorizontal: spacing.sm, paddingVertical: 2,
               }}
             >
-              <Text style={[textStyle('caption', t.successStrong), weight('600')]} maxFontSizeMultiplier={1.6}>
+              <Text role="caption" color={t.successStrong} maxFontSizeMultiplier={1.6} style={{ fontWeight: '600' }}>
                 Signed in
               </Text>
             </View>
@@ -529,11 +551,12 @@ export default function ProfileScreen() {
         {identity}
 
         {/* Sign-in entry — only for users who skipped auth at startup (no googleId).
-            Routes to the EXISTING auth flow; no duplicated OAuth code. */}
+            Routes to the EXISTING auth flow; no duplicated OAuth code. The
+            screen's one primary action. */}
         {status === 'ready' && !profile.googleId ? (
           <Card>
-            <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>Back up your progress</Text>
-            <Text style={[textStyle('bodySm', t.textSecondary), { marginTop: spacing.xs, marginBottom: spacing.md }]} maxFontSizeMultiplier={2}>
+            <Text role="headline">Back up your progress</Text>
+            <Text role="footnote" color={t.textSecondary} style={{ marginTop: spacing.xs, marginBottom: spacing.md }}>
               Save your data and restore it on any device
             </Text>
             <Button
@@ -546,34 +569,65 @@ export default function ProfileScreen() {
         ) : null}
       </View>
 
-      <View>
-        <SectionHeader
-          title="My Focus List"
-          subtitle={focusListingsData.length > 1 ? 'Long-press an exam to drag it, or use the up and down buttons.' : undefined}
-          actionLabel="Add more"
-          onAction={() => closeTo('/(tabs)/explore')}
-        />
-        <Card padded={false} style={{ paddingHorizontal: spacing.sm }}>
-          {focusListingsData.length === 0 ? (
-            <Text style={[textStyle('bodySm', t.textSecondary), { padding: spacing.md }]} maxFontSizeMultiplier={2}>
-              No exams in focus yet. Tap Add more to pick one.
+      {/* Study: the exams in focus (drag or step to reorder), then reminders. */}
+      <View style={{ gap: spacing.xl }}>
+        <View style={{ gap: spacing.sm - 2 }}>
+          <Text role="footnote" color={t.textSecondary} {...heading(2)} style={{ paddingHorizontal: spacing.lg }}>
+            Exams in focus
+          </Text>
+          <View style={{ backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden' }}>
+            {focusListingsData.length === 0 ? (
+              <Text role="footnote" color={t.textSecondary} style={{ padding: spacing.lg }}>
+                No exams in focus yet. Tap Add more to pick one.
+              </Text>
+            ) : (
+              focusListingsData.map((item, idx) => (
+                <FocusListItem
+                  key={item.slug}
+                  item={item}
+                  index={idx}
+                  total={focusListingsData.length}
+                  onMoveUp={() => void moveListing(item.slug, 'up')}
+                  onMoveDown={() => void moveListing(item.slug, 'down')}
+                  onRemove={() => void removeListing(item.slug)}
+                  isDragging={draggingSlug === item.slug}
+                  onDragStart={() => setDraggingSlug(item.slug)}
+                />
+              ))
+            )}
+            <View style={{ borderTopWidth: focusListingsData.length > 0 ? 1 : 0, borderTopColor: t.divider }}>
+              <InsetRow title="Add more" icon={PlusOutlined} onPress={() => closeTo('/(tabs)/explore')} />
+            </View>
+          </View>
+          {focusListingsData.length > 1 ? (
+            <Text role="footnote" color={t.textSecondary} style={{ paddingHorizontal: spacing.lg }}>
+              Long-press an exam to drag it, or use the up and down buttons.
             </Text>
-          ) : (
-            focusListingsData.map((item, idx) => (
-              <FocusListItem
-                key={item.slug}
-                item={item}
-                index={idx}
-                total={focusListingsData.length}
-                onMoveUp={() => void moveListing(item.slug, 'up')}
-                onMoveDown={() => void moveListing(item.slug, 'down')}
-                onRemove={() => void removeListing(item.slug)}
-                isDragging={draggingSlug === item.slug}
-                onDragStart={() => setDraggingSlug(item.slug)}
-              />
-            ))
-          )}
-        </Card>
+          ) : null}
+        </View>
+
+        <InsetGroup header="Study" headerLevel={2} inset={false} footer="A daily practice nudge, plus exam countdowns.">
+          <InsetRow
+            title="Study reminders"
+            subtitle={remindersOn ? `Daily at ${formatHour(dailyReminderHour)}` : 'Off'}
+            icon={Bell1Outlined}
+            switchValue={remindersOn}
+            onSwitchChange={() => void toggleReminders(reminderListings)}
+          />
+          <InsetRow
+            title="Progress and analytics"
+            subtitle="Readiness, accuracy, pace and mistakes"
+            icon={TrendUp1Outlined}
+            onPress={() => closeTo('/(tabs)/progress')}
+          />
+          <InsetRow
+            title="Scholarship profile"
+            subtitle={profile.scholarshipIncomplete ? 'Add income, GWA and province for better matches' : 'Complete. Powering your scholarship matches'}
+            icon={GraduationCap1Outlined}
+            iconTone={profile.scholarshipIncomplete ? 'warning' : 'success'}
+            onPress={() => router.push('/profile/scholarship-info')}
+          />
+        </InsetGroup>
       </View>
 
       {/* Target Courses — editable; lets older-onboarding users add courses later */}
@@ -582,83 +636,75 @@ export default function ProfileScreen() {
   )
 
   const secondary = (
-    <View style={{ gap: spacing.xxl }}>
-      <Card padded={false} style={{ overflow: 'hidden' }}>
-        <ListRow
-          title="Progress and analytics"
-          subtitle="Readiness, accuracy, pace and mistakes"
-          leading={rowIcon(TrendUp1Outlined, t.accentText)}
-          onPress={() => closeTo('/(tabs)/progress')}
-        />
-        <View style={divided(1)}>
-          <ListRow
-            title="Scholarship profile"
-            subtitle={profile.scholarshipIncomplete ? 'Add income, GWA and province for better matches' : 'Complete. Powering your scholarship matches'}
-            leading={rowIcon(GraduationCap1Outlined, profile.scholarshipIncomplete ? t.warningStrong : t.successStrong)}
-            onPress={() => router.push('/profile/scholarship-info')}
-          />
-        </View>
+    <View style={{ gap: spacing.xl }}>
+      <InsetGroup header="Account" headerLevel={2} inset={false}>
         {premium.enabled ? (
-          <View style={divided(2)}>
-            <ListRow
-              title="Iskotify Full Access"
-              subtitle={premium.isPremium ? 'Unlimited practice and full mocks' : 'Unlimited practice, full mocks and answer reasons. One-time payment'}
-              leading={rowIcon(Crown3Outlined, premium.isPremium ? t.successStrong : t.accentText)}
-              trailing={premium.isPremium ? <Badge label="Active" tone="success" /> : undefined}
-              accessibilityLabel={premium.isPremium ? 'Iskotify Full Access, active' : undefined}
-              onPress={() => router.push('/upgrade?from=profile')}
-            />
-          </View>
-        ) : null}
-      </Card>
-
-      <View>
-        <SectionHeader title="Your data" />
-        <Card padded={false} style={{ overflow: 'hidden' }}>
-          <ListRow
-            title="Export Data"
-            subtitle="Save your preferences as a JSON file"
-            leading={rowIcon(Download1Outlined, t.textSecondary)}
-            onPress={handleExport}
+          <InsetRow
+            title="Iskotify Full Access"
+            subtitle={premium.isPremium ? 'Unlimited practice and full mocks' : 'Unlimited practice, full mocks and answer reasons. One-time payment'}
+            icon={Crown3Outlined}
+            iconTone={premium.isPremium ? 'success' : 'accent'}
+            trailing={premium.isPremium ? <Badge label="Active" tone="success" /> : undefined}
+            accessibilityLabel={premium.isPremium ? 'Iskotify Full Access, active' : undefined}
+            onPress={() => router.push('/upgrade?from=profile')}
           />
-          <View style={divided(1)}>
-            <ListRow
-              title="Import Data"
-              subtitle="Restore from a previously exported JSON file"
-              leading={rowIcon(Upload1Outlined, t.textSecondary)}
-              onPress={handleImport}
-            />
-          </View>
-          <View style={divided(1)}>
-            <ListRow
-              title="Sign Out"
-              subtitle="Sign out of your Google account on this device"
-              leading={rowIcon(ExitOutlined, t.textSecondary)}
-              onPress={handleSignOut}
-            />
-          </View>
-          <View style={divided(1)}>
-            <ListRow
-              title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
-              subtitle={Platform.OS === 'web'
-                ? 'Permanently delete all local data in this browser and start over'
-                : 'Delete your study data on this device. Notes are kept'}
-              leading={rowIcon(Trash3Outlined, t.danger)}
-              onPress={handleResetAppData}
-            />
-          </View>
-          {signedIn ? (
-            <View style={divided(1)}>
-              <ListRow
-                title="Delete account"
-                subtitle="Permanently delete your account, backup and reports"
-                leading={rowIcon(Trash3Outlined, t.danger)}
-                onPress={() => setDeleteOpen(true)}
-              />
-            </View>
-          ) : null}
-        </Card>
-      </View>
+        ) : null}
+        <InsetRow
+          title="Export Data"
+          subtitle="Save your preferences as a JSON file"
+          icon={Download1Outlined}
+          iconTone="neutral"
+          onPress={handleExport}
+        />
+        <InsetRow
+          title="Import Data"
+          subtitle="Restore from a previously exported JSON file"
+          icon={Upload1Outlined}
+          iconTone="neutral"
+          onPress={handleImport}
+        />
+      </InsetGroup>
+
+      <InsetGroup header="Help" headerLevel={2} inset={false}>
+        <InsetRow title="Leave feedback" icon={Comment1Outlined} iconTone="neutral" onPress={() => router.push('/settings/leave-feedback')} />
+        <InsetRow title="Report a bug" icon={Bug1Outlined} iconTone="neutral" onPress={() => router.push('/settings/report-bug')} />
+        <InsetRow title="Privacy policy" icon={Shield2Outlined} iconTone="neutral" onPress={() => router.push('/privacy')} />
+        <InsetRow title="Terms of service" icon={ClipboardOutlined} iconTone="neutral" onPress={() => router.push('/terms')} />
+      </InsetGroup>
+
+      <InsetGroup inset={false} footer="Sign out keeps your progress on this device. Reset and delete cannot be undone.">
+        <InsetRow
+          title="Sign Out"
+          subtitle="Sign out of your Google account on this device"
+          icon={ExitOutlined}
+          iconTone="danger"
+          destructive
+          chevron={false}
+          onPress={handleSignOut}
+        />
+        <InsetRow
+          title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
+          subtitle={Platform.OS === 'web'
+            ? 'Permanently delete all local data in this browser and start over'
+            : 'Delete your study data on this device. Notes are kept'}
+          icon={Trash3Outlined}
+          iconTone="danger"
+          destructive
+          chevron={false}
+          onPress={handleResetAppData}
+        />
+        {signedIn ? (
+          <InsetRow
+            title="Delete account"
+            subtitle="Permanently delete your account, backup and reports"
+            icon={Trash3Outlined}
+            iconTone="danger"
+            destructive
+            chevron={false}
+            onPress={() => setDeleteOpen(true)}
+          />
+        ) : null}
+      </InsetGroup>
     </View>
   )
 
@@ -692,8 +738,7 @@ export default function ProfileScreen() {
           </View>
         ) : null}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>Profile</Text>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Your account, focus list and data</Text>
+          <Text role="title1" {...heading(1)} maxFontSizeMultiplier={1.4}>Profile</Text>
         </View>
         <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />
         <IconButton icon={Gear1Outlined} label="Settings" onPress={() => router.push('/settings')} />

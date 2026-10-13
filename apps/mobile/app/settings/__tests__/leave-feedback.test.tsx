@@ -2,6 +2,8 @@ import React from 'react'
 import { render, fireEvent, screen, waitFor } from '@testing-library/react-native'
 import LeaveFeedbackScreen from '../leave-feedback'
 import { aria } from '../../../test-utils/aria'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
+import { TextField } from '../../../components/ui/TextField'
 
 const mockBack = jest.fn()
 jest.mock('expo-router', () => ({
@@ -47,6 +49,21 @@ describe('LeaveFeedbackScreen', () => {
     expect(aria(screen.getByRole('button', { name: 'Send feedback' }), 'aria-disabled')).toBe(true)
     fireEvent.changeText(screen.getByLabelText('Your message'), 'Love it')
     expect(aria(screen.getByRole('button', { name: 'Send feedback' }), 'aria-disabled')).toBe(false)
+  })
+
+  it('every field is a labelled TextField', () => {
+    render(<LeaveFeedbackScreen />)
+    const labels = screen.UNSAFE_getAllByType(TextField).map(f => f.props.label)
+    expect(labels).toEqual(['Your message'])
+  })
+
+  it('has exactly one primary action, on the form and on the thank-you', async () => {
+    render(<LeaveFeedbackScreen />)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+    fireEvent.changeText(screen.getByLabelText('Your message'), 'Love it')
+    fireEvent.press(screen.getByRole('button', { name: 'Send feedback' }))
+    await screen.findByText(/Salamat/)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 
   it('sends the rating and message, then thanks the student', async () => {

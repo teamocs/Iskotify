@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import * as UpgradeCardModule from '../UpgradeCard'
 import { UpgradeCard, PRACTICE_CAP_BODY } from '../UpgradeCard'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
 
 const mockPush = jest.fn()
 jest.mock('expo-router', () => ({ router: { push: (...a: unknown[]) => mockPush(...a) } }))
@@ -15,6 +16,11 @@ describe('UpgradeCard', () => {
     expect(screen.getByText(PRACTICE_CAP_BODY)).toBeTruthy()
     fireEvent.press(screen.getByRole('button', { name: 'Unlock Full Access' }))
     expect(mockPush).toHaveBeenCalledWith('/upgrade?from=practice_cap')
+  })
+
+  it('has exactly one primary action', () => {
+    render(<UpgradeCard title="That's today's free practice" body={PRACTICE_CAP_BODY} source="practice_cap" />)
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 
   it('uses the agreed friendly practice wording', () => {

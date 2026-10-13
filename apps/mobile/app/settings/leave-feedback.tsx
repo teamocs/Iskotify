@@ -1,15 +1,16 @@
 import { useState, useCallback } from 'react'
-import { View, Text, Pressable } from 'react-native'
-import { router } from 'expo-router'
+import { View } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { StarFatOutlined, StarFatSolid } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, weight } from '../../theme/tokens'
 import { InfoPage } from '../../components/info/InfoPage'
 import { StatusPanel } from '../../components/auth/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
-import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { PressableScale } from '../../components/ui/Pressable'
+import { Text } from '../../components/ui/Text'
+import { decorative, focusRing } from '../../components/ui/a11y'
 import { goBackOr } from '../../components/explore/DetailTopBar'
 import { submitFeedback } from '../../services/appFeedback'
 
@@ -47,7 +48,7 @@ export default function LeaveFeedbackScreen() {
       <InfoPage title="Leave feedback">
         <View style={{ gap: spacing.lg }}>
           <StatusPanel tone="success" title="Salamat! We got your feedback.">
-            <Text style={textStyle('bodySm', t.textSecondary)}>It helps us make Iskotify better for every student.</Text>
+            <Text role="footnote" color={t.textSecondary}>It helps us make Iskotify better for every student.</Text>
           </StatusPanel>
           <Button label="Done" onPress={() => goBackOr('/settings')} size="lg" fullWidth />
         </View>
@@ -62,7 +63,7 @@ export default function LeaveFeedbackScreen() {
     >
       <View style={{ gap: spacing.xl }}>
         <View style={{ gap: spacing.sm }}>
-          <Text style={textStyle('label', t.textPrimary)}>How would you rate Iskotify? (optional)</Text>
+          <Text role="footnote" style={weight('600')}>How would you rate Iskotify? (optional)</Text>
           <View
             accessibilityRole="radiogroup"
             accessibilityLabel="Rating"
@@ -71,29 +72,26 @@ export default function LeaveFeedbackScreen() {
             {STARS.map(n => {
               const filled = n <= rating
               return (
-                <Pressable
+                <PressableScale
                   key={n}
                   onPress={() => setRating(n)}
                   accessibilityRole="radio"
                   accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
                   aria-checked={rating === n}
-                  style={(state) => {
-                    const { pressed, hovered, focused } = state as WebPressableState
-                    return [{
-                      width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
-                      backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
-                    }, focusRing(t.focusRing, focused)]
-                  }}
+                  style={({ pressed, hovered, focused }) => [{
+                    width: 48, height: 48, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
+                  }, focusRing(t.focusRing, focused)]}
                 >
                   <View {...decorative}>
                     <Lineicons icon={filled ? StarFatSolid : StarFatOutlined} size={28} color={filled ? t.warning : t.inputBorder} />
                   </View>
-                </Pressable>
+                </PressableScale>
               )
             })}
           </View>
           {rating > 0 ? (
-            <Text style={textStyle('bodySm', t.textSecondary)}>{`${rating} of 5: ${RATING_WORDS[rating]}`}</Text>
+            <Text role="footnote" color={t.textSecondary}>{`${rating} of 5: ${RATING_WORDS[rating]}`}</Text>
           ) : null}
         </View>
 
@@ -106,7 +104,7 @@ export default function LeaveFeedbackScreen() {
         />
 
         {error ? (
-          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={textStyle('bodySm', t.danger)}>
+          <Text role="footnote" color={t.danger} accessibilityRole="alert" accessibilityLiveRegion="polite">
             {error}
           </Text>
         ) : null}

@@ -89,6 +89,17 @@ describe('computeWeeklyData', () => {
     expect(today.sessionCount).toBe(1)
   })
 
+  it('sums study minutes per day, counting a mock sitting once (its longest section row)', () => {
+    const now = Date.now()
+    const bars = computeWeeklyData([
+      { completedAt: now, score: 8, total: 10, durationSecs: 600 },
+      { completedAt: now, score: 5, total: 10, attemptKey: 7, durationSecs: 1800 },
+      { completedAt: now, score: 5, total: 10, attemptKey: 7, durationSecs: 1200 },
+    ])
+    expect(bars[6]!.minutes).toBe(40)
+    expect(bars[0]!.minutes).toBe(0)
+  })
+
   it('ignores sessions with total=0 to avoid division errors', () => {
     const sessions = [{ completedAt: Date.now(), score: 0, total: 0 }]
     const bars = computeWeeklyData(sessions)

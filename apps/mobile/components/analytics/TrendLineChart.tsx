@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
 import Svg, { Polyline, Circle, Line } from 'react-native-svg'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing } from '../../theme/tokens'
+import { Text } from '../ui/Text'
 import type { TrendPoint } from '../../services/analyticsAggregates'
 
 /**
@@ -46,7 +47,7 @@ export function TrendLineChart({ points }: { points: TrendPoint[] }) {
   if (!hasData) {
     return (
       <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
-        <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+        <Text role="footnote" color={t.textSecondary} style={{ textAlign: 'center' }}>
           Complete a few more sessions to see your trend.
         </Text>
       </View>
@@ -112,7 +113,7 @@ export function TrendLineChart({ points }: { points: TrendPoint[] }) {
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         {points.map((p, i) => (
-          <Text key={i} style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>
+          <Text key={i} role="caption" color={t.textSecondary} maxFontSizeMultiplier={1.4}>
             {i === 0 || i === n - 1 ? fmtWeek(p.weekStart) : ''}
           </Text>
         ))}

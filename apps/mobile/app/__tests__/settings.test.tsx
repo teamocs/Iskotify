@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent, within } from '@testing-library/react-native'
 import SettingsScreen from '../settings'
 import { aria } from '../../test-utils/aria'
 
@@ -117,11 +117,53 @@ describe('SettingsScreen', () => {
     expect(screen.getByRole('switch', { name: 'Weekly summary' })).toBeTruthy()
   })
 
+  it('the reminder time is one adjustable control named by the setting, with increment and decrement', async () => {
+    render(<SettingsScreen />)
+    await screen.findByText('9:00 AM')
+    const adj = screen.getByRole('adjustable', { name: 'Daily reminder time' })
+    expect(adj.props.accessibilityValue).toEqual({ text: '9:00 AM' })
+    expect(adj.props.accessibilityActions.map((a: { name: string }) => a.name)).toEqual(['increment', 'decrement'])
+    fireEvent(adj, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
+    expect(await screen.findByText('10:00 AM')).toBeTruthy()
+    fireEvent(screen.getByRole('adjustable', { name: 'Daily reminder time' }), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } })
+    expect(await screen.findByText('9:00 AM')).toBeTruthy()
+  })
+
+  // Web: a slider's children are presentational in ARIA, so on web the stepper
+  // is a labelled group whose two buttons are their own keyboard tab stops.
+  it('web: the reminder time is a labelled group (not a slider) with two focusable named buttons', async () => {
+    Platform.OS = 'web'
+    render(<SettingsScreen />)
+    await screen.findByText('9:00 AM')
+    expect(screen.queryByRole('adjustable')).toBeNull()
+    const group = screen.getByRole('group', { name: 'Daily reminder time' })
+    expect(group.props.role).toBe('group')
+    const earlier = within(group).getByRole('button', { name: 'Earlier daily reminder time' })
+    const later = within(group).getByRole('button', { name: 'Later daily reminder time' })
+    for (const b of [earlier, later]) {
+      expect(b.props.focusable).not.toBe(false)
+      expect(b.props.tabIndex).not.toBe(-1)
+    }
+    expect(within(group).getByText('9:00 AM')).toBeTruthy()
+    fireEvent.press(later)
+    expect(await screen.findByText('10:00 AM')).toBeTruthy()
+    fireEvent.press(within(screen.getByRole('group', { name: 'Daily reminder time' })).getByRole('button', { name: 'Earlier daily reminder time' }))
+    expect(await screen.findByText('9:00 AM')).toBeTruthy()
+  })
+
+  it('the stepper buttons name the setting they change', async () => {
+    render(<SettingsScreen />)
+    await screen.findByText('9:00 AM')
+    expect(screen.getByRole('button', { name: 'Earlier daily reminder time' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Later daily reminder time' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Later' })).toBeNull()
+  })
+
   it('stepping the reminder time forward shows the next hour; steppers are 44pt', async () => {
     const { StyleSheet } = require('react-native')
     render(<SettingsScreen />)
     await screen.findByText('9:00 AM')
-    const later = screen.getByRole('button', { name: 'Later' })
+    const later = screen.getByRole('button', { name: 'Later daily reminder time' })
     const st = StyleSheet.flatten(typeof later.props.style === 'function' ? later.props.style({ pressed: false }) : later.props.style)
     expect(st.width).toBeGreaterThanOrEqual(44)
     expect(st.height).toBeGreaterThanOrEqual(44)
@@ -148,6 +190,25 @@ describe('SettingsScreen', () => {
   it('shows Student as the default name', async () => {
     render(<SettingsScreen />)
     expect(await screen.findByText('Student')).toBeTruthy()
+  })
+
+  // P4: the move to inset groups keeps every setting.
+  it('keeps every option, in inset groups with footnote headers', async () => {
+    Platform.OS = 'android'
+    render(<SettingsScreen />)
+    await screen.findByText('Student')
+    for (const name of ['Profile', 'Notifications', 'Privacy', 'Feedback', 'About', 'Session']) {
+      expect(screen.getByRole('header', { name })).toBeTruthy()
+    }
+    for (const name of ['Push notifications', 'Weekly summary', 'Share anonymous usage analytics']) {
+      expect(screen.getByRole('switch', { name })).toBeTruthy()
+    }
+    for (const name of ['Earlier daily reminder time', 'Later daily reminder time', 'Grades and family details', 'Report a bug', 'Leave feedback',
+      'About Iskotify', 'Help and support', 'Privacy policy', 'Terms of service', 'Exit app']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy()
+    }
+    expect(screen.getByText('Daily reminder time')).toBeTruthy()
+    expect(screen.getAllByTestId('inset-group').length).toBe(6)
   })
 
   it('has no on-device AI model controls: the student app ships no AI', () => {

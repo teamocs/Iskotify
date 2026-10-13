@@ -35,7 +35,9 @@ const mockApply = jest.fn().mockResolvedValue(true)
 jest.mock('../../services/analyticsConsent', () => ({ applyAnalyticsConsent: (...a: unknown[]) => mockApply(...a) }))
 
 const SWITCH = 'Share anonymous usage analytics'
-const isOn = () => screen.getByRole('switch', { name: SWITCH }).props.value
+// P4: a whole-row switch (InsetRow). Its state is aria-checked; a tap toggles it.
+const isOn = () => aria(screen.getByRole('switch', { name: SWITCH }), 'aria-checked')
+const flip = () => fireEvent.press(screen.getByRole('switch', { name: SWITCH }))
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -73,7 +75,7 @@ describe('Settings → Privacy', () => {
   it('switching it off is saved and applied straight away', async () => {
     render(<SettingsScreen />)
     await waitFor(() => expect(isOn()).toBe(true))
-    await act(async () => { fireEvent(screen.getByRole('switch', { name: SWITCH }), 'valueChange', false) })
+    await act(async () => { flip() })
     expect(mockSetOptIn).toHaveBeenCalledWith(expect.anything(), false)
     expect(mockApply).toHaveBeenCalled()
     expect(isOn()).toBe(false)
@@ -83,7 +85,7 @@ describe('Settings → Privacy', () => {
     mockStored = { ageBand: 'minor', consentedAt: 5, guardianConsentAt: 5, analyticsOptIn: null }
     render(<SettingsScreen />)
     await act(async () => {})
-    await act(async () => { fireEvent(screen.getByRole('switch', { name: SWITCH }), 'valueChange', true) })
+    await act(async () => { flip() })
     expect(mockSetOptIn).toHaveBeenCalledWith(expect.anything(), true)
     expect(isOn()).toBe(true)
   })
@@ -93,9 +95,9 @@ describe('Settings → Privacy', () => {
     const { getSettings } = jest.requireMock('../../services/settings') as { getSettings: jest.Mock }
     getSettings.mockImplementationOnce(() => new Promise(r => { resolve = r }))
     render(<SettingsScreen />)
-    expect(screen.getByRole('switch', { name: SWITCH }).props.disabled).toBe(true)
+    expect(aria(screen.getByRole('switch', { name: SWITCH }), 'aria-disabled')).toBe(true)
     await act(async () => { resolve(mockStored) })
-    expect(screen.getByRole('switch', { name: SWITCH }).props.disabled).toBeFalsy()
+    expect(aria(screen.getByRole('switch', { name: SWITCH }), 'aria-disabled')).toBeFalsy()
     expect(isOn()).toBe(true)
   })
 
@@ -104,7 +106,7 @@ describe('Settings → Privacy', () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {})
     render(<SettingsScreen />)
     await waitFor(() => expect(isOn()).toBe(true))
-    await act(async () => { fireEvent(screen.getByRole('switch', { name: SWITCH }), 'valueChange', false) })
+    await act(async () => { flip() })
     expect(isOn()).toBe(true)
   })
 

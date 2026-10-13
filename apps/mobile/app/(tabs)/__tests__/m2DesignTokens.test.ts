@@ -1,6 +1,8 @@
 // Redesign M2 guard for Today, Progress and Profile (DESIGN.md "the rule that
 // matters" + the redesign brief's token-drift finding). Every colour resolves
-// through useTheme(), every text size through a textStyle role, labels are
+// through useTheme(), every text size through an iOS text role (P4: <Text
+// role> / iosTextStyle; app/__tests__/p4AccountDesignLint.test.ts also bans
+// the legacy textStyle names on Progress and Profile), labels are
 // sentence case, and icons are drawn (Lineicons) — never emoji or a Unicode
 // glyph standing in for one.
 import fs from 'fs'
@@ -26,6 +28,7 @@ const FILES = [
   'components/analytics/SubjectReadinessList.tsx',
   'components/analytics/TrendLineChart.tsx',
   'components/analytics/WeeklyChart.tsx',
+  'components/analytics/ExamReadinessCard.tsx',
 ]
 
 const HEX_COLOR = /(?<!&)#[0-9a-fA-F]{3,8}\b/g
@@ -45,7 +48,7 @@ function strip(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 }
 
-describe('Today / Progress / Profile use tokens, textStyle roles and real icons', () => {
+describe('Today / Progress / Profile use tokens, iOS text roles and real icons', () => {
   for (const rel of FILES) {
     describe(rel, () => {
       // Read inside each test so a missing file fails its own tests, not the suite.
@@ -54,7 +57,7 @@ describe('Today / Progress / Profile use tokens, textStyle roles and real icons'
         expect(read().match(HEX_COLOR) ?? []).toEqual([])
         expect(read().match(RGBA_LITERAL) ?? []).toEqual([])
       })
-      it('sets no fontSize by hand (textStyle roles only)', () => {
+      it('sets no fontSize by hand (iOS text roles only)', () => {
         expect(read().match(FONT_SIZE) ?? []).toEqual([])
       })
       it('has no uppercase labels', () => {

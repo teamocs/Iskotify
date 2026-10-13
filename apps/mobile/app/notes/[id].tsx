@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { View, Text, TextInput, ScrollView, Pressable, KeyboardAvoidingView, Platform } from 'react-native'
+import { View, TextInput, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native'
 import { Stack, router, useLocalSearchParams } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -16,7 +16,7 @@ import {
   FileQuestionOutlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { iosTextStyle, radius, spacing, weight } from '../../theme/tokens'
 import { useDb } from '../../hooks/useDb'
 import { schedulePushUserData } from '../../services/pushScheduler'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
@@ -30,7 +30,10 @@ import { Sheet } from '../../components/ui/Sheet'
 import { Button } from '../../components/ui/Button'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { decorative, focusRing } from '../../components/ui/a11y'
+import { PressableScale } from '../../components/ui/Pressable'
+import { Text } from '../../components/ui/Text'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
 import { DetailTopBar, goBackOr } from '../../components/explore/DetailTopBar'
 import { NOTE_SWATCHES, noteSurface, noteSwatchBorder, noteTone } from '../../components/notes/noteTone'
 
@@ -70,12 +73,11 @@ function ToolButton({ label, onPress, active, children }: {
 }) {
   const { theme: t } = useTheme()
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={(state) => {
-        const { pressed, hovered, focused } = state as WebPressableState
+      style={({ pressed, hovered, focused }) => {
         return [
           {
             width: 44, height: 44, borderRadius: radius.md, borderCurve: 'continuous',
@@ -87,7 +89,7 @@ function ToolButton({ label, onPress, active, children }: {
       }}
     >
       <View {...decorative}>{children}</View>
-    </Pressable>
+    </PressableScale>
   )
 }
 
@@ -95,13 +97,12 @@ function ToolButton({ label, onPress, active, children }: {
 function CheckBox({ checked, label, onPress }: { checked: boolean; label: string; onPress: () => void }) {
   const { theme: t } = useTheme()
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       aria-checked={checked}
-      style={(state) => {
-        const { focused } = state as WebPressableState
+      style={({ focused }) => {
         return [
           { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.field },
           focusRing(t.focusRing, focused),
@@ -119,7 +120,55 @@ function CheckBox({ checked, label, onPress }: { checked: boolean; label: string
       >
         {checked ? <Lineicons icon={CheckOutlined} size={14} color={t.surface} /> : null}
       </View>
-    </Pressable>
+    </PressableScale>
+  )
+}
+
+/** One label in the picker sheet: the whole row is a checkbox (aria-checked). */
+function LabelCheckRow({ name, checked, last, onPress }: {
+  name: string
+  checked: boolean
+  last: boolean
+  onPress: () => void
+}) {
+  const { theme: t } = useTheme()
+  return (
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="checkbox"
+      accessibilityLabel={name}
+      aria-checked={checked}
+      style={({ pressed, hovered, focused }) => [
+        {
+          flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52,
+          paddingHorizontal: spacing.lg,
+          backgroundColor: pressed ? t.surface2 : hovered ? t.surfaceSubtle : 'transparent',
+        },
+        focusRing(t.focusRing, focused),
+      ]}
+    >
+      <Text role="body" style={{ flex: 1, paddingVertical: spacing.sm }}>{name}</Text>
+      <View
+        {...decorative}
+        style={{
+          width: 24, height: 24, borderRadius: 6, borderWidth: 1.5,
+          borderColor: checked ? t.accent : t.inputBorder,
+          backgroundColor: checked ? t.accent : 'transparent',
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        {checked ? <Lineicons icon={CheckOutlined} size={14} color={t.textInverse} /> : null}
+      </View>
+      {last ? null : (
+        <View
+          {...decorative}
+          style={{
+            position: 'absolute', left: spacing.lg, right: 0, bottom: 0,
+            height: StyleSheet.hairlineWidth, backgroundColor: t.divider,
+          }}
+        />
+      )}
+    </PressableScale>
   )
 }
 
@@ -301,15 +350,12 @@ export default function NoteEditorScreen() {
     <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginLeft: -spacing.md }}>
       <CheckBox checked={item.isChecked} label={item.text || 'List item'} onPress={() => toggleCheck(item.id)} />
       {item.isChecked ? (
-        <Text
-          style={[textStyle('body', t.textSecondary), { flex: 1, textDecorationLine: 'line-through' }]}
-          maxFontSizeMultiplier={2}
-        >
+        <Text role="body" color={t.textSecondary} style={{ flex: 1, textDecorationLine: 'line-through' }}>
           {item.text}
         </Text>
       ) : (
         <TextInput
-          style={[textStyle('body', t.textPrimary), { flex: 1, minHeight: 44 }, webInput]}
+          style={[iosTextStyle('body', t.textPrimary), { flex: 1, minHeight: 44 }, webInput]}
           value={item.text}
           onChangeText={t2 => updateCheckText(item.id, t2)}
           accessibilityLabel={item.text ? `Edit ${item.text}` : 'New list item'}
@@ -351,7 +397,7 @@ export default function NoteEditorScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <TextInput
-              style={[textStyle('title', t.textPrimary), webInput]}
+              style={[iosTextStyle('title1', t.textPrimary), webInput]}
               accessibilityLabel="Note title"
               placeholder="Title"
               placeholderTextColor={t.textTertiary}
@@ -362,12 +408,11 @@ export default function NoteEditorScreen() {
             />
 
             {hasActiveReminder ? (
-              <Pressable
+              <PressableScale
                 onPress={() => setShowReminderPicker(true)}
                 accessibilityRole="button"
                 accessibilityLabel={`Reminder set for ${formatReminderFull(reminderAt!)}. Change it.`}
-                style={(state) => {
-                  const { focused } = state as WebPressableState
+                style={({ focused }) => {
                   return [
                     {
                       alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
@@ -379,13 +424,13 @@ export default function NoteEditorScreen() {
                 }}
               >
                 <View {...decorative}><Lineicons icon={Bell1Solid} size={14} color={t.accentText} /></View>
-                <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={2}>{formatReminderFull(reminderAt!)}</Text>
-              </Pressable>
+                <Text role="footnote" color={t.accentText} style={weight('600')}>{formatReminderFull(reminderAt!)}</Text>
+              </PressableScale>
             ) : null}
 
             {type === 'text' ? (
               <TextInput
-                style={[textStyle('body', t.textPrimary), { minHeight: 240 }, webInput]}
+                style={[iosTextStyle('body', t.textPrimary), { minHeight: 240 }, webInput]}
                 accessibilityLabel="Note text"
                 placeholder="Start writing"
                 placeholderTextColor={t.textTertiary}
@@ -409,7 +454,7 @@ export default function NoteEditorScreen() {
                 </View>
                 {checked.length > 0 ? (
                   <>
-                    <Text style={[textStyle('label', t.textSecondary), { marginTop: spacing.md }]} maxFontSizeMultiplier={2}>
+                    <Text role="footnote" color={t.textSecondary} style={[weight('600'), { marginTop: spacing.md }]}>
                       {`${checked.length} checked`}
                     </Text>
                     {checked.map(checklistRow)}
@@ -436,14 +481,13 @@ export default function NoteEditorScreen() {
               {NOTE_SWATCHES.map(sw => {
                 const on = sw.tone === tone
                 return (
-                  <Pressable
+                  <PressableScale
                     key={sw.tone}
                     onPress={() => setColor(sw.key)}
                     accessibilityRole="radio"
                     accessibilityLabel={sw.name}
                     aria-checked={on}
-                    style={(state) => {
-                      const { focused } = state as WebPressableState
+                    style={({ focused }) => {
                       return [
                         { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
                         focusRing(t.focusRing, focused),
@@ -464,7 +508,7 @@ export default function NoteEditorScreen() {
                         {on ? <Lineicons icon={CheckOutlined} size={14} color={t.textPrimary} /> : null}
                       </View>
                     </View>
-                  </Pressable>
+                  </PressableScale>
                 )
               })}
             </View>
@@ -497,7 +541,7 @@ export default function NoteEditorScreen() {
       <Sheet visible={showLabelPicker} title="Labels" onClose={() => setShowLabelPicker(false)}>
         {labels.length === 0 ? (
           <View style={{ gap: spacing.md, paddingVertical: spacing.sm }}>
-            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+            <Text role="body" color={t.textSecondary}>
               No labels yet. Create them on the Labels page.
             </Text>
             <Button
@@ -506,74 +550,38 @@ export default function NoteEditorScreen() {
               onPress={() => { setShowLabelPicker(false); router.push('/notes/labels' as never) }}
             />
           </View>
-        ) : labels.map(label => {
-          const on = assignedIds.includes(label.id)
-          return (
-            <Pressable
-              key={label.id}
-              onPress={() => void toggleLabelAssign(label.id)}
-              accessibilityRole="checkbox"
-              accessibilityLabel={label.name}
-              aria-checked={on}
-              style={(state) => {
-                const { pressed, focused } = state as WebPressableState
-                return [
-                  {
-                    flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52,
-                    borderBottomWidth: 1, borderBottomColor: t.divider,
-                    backgroundColor: pressed ? t.surface2 : 'transparent',
-                  },
-                  focusRing(t.focusRing, focused),
-                ]
-              }}
-            >
-              <Text style={[textStyle('body', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>{label.name}</Text>
-              <View
-                {...decorative}
-                style={{
-                  width: 24, height: 24, borderRadius: 6, borderWidth: 1.5,
-                  borderColor: on ? t.accent : t.inputBorder,
-                  backgroundColor: on ? t.accent : 'transparent',
-                  alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                {on ? <Lineicons icon={CheckOutlined} size={14} color={t.textInverse} /> : null}
-              </View>
-            </Pressable>
-          )
-        })}
+        ) : (
+          <InsetGroup inset={false} testID="note-label-picker">
+            {labels.map((label, index) => (
+              <LabelCheckRow
+                key={label.id}
+                name={label.name}
+                checked={assignedIds.includes(label.id)}
+                last={index === labels.length - 1}
+                onPress={() => void toggleLabelAssign(label.id)}
+              />
+            ))}
+          </InsetGroup>
+        )}
       </Sheet>
 
       <Sheet visible={showReminderPicker} title="Set a reminder" onClose={() => setShowReminderPicker(false)}>
-        {reminderOpts.map(opt => {
-          const current = reminderAt != null && opt.ms === reminderAt
-          return (
-            <Pressable
-              key={opt.label}
-              onPress={() => void handleSetReminder(opt.ms)}
-              accessibilityRole="button"
-              accessibilityLabel={`${opt.label}, ${opt.sub}`}
-              style={(state) => {
-                const { pressed, focused } = state as WebPressableState
-                return [
-                  {
-                    flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 60,
-                    borderBottomWidth: 1, borderBottomColor: t.divider,
-                    backgroundColor: pressed ? t.surface2 : 'transparent',
-                  },
-                  focusRing(t.focusRing, focused),
-                ]
-              }}
-            >
-              <View {...decorative}><Lineicons icon={Alarm1Outlined} size={20} color={t.accentText} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{opt.label}</Text>
-                <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{opt.sub}</Text>
-              </View>
-              {current ? <View {...decorative}><Lineicons icon={CheckOutlined} size={16} color={t.accentText} /></View> : null}
-            </Pressable>
-          )
-        })}
+        <InsetGroup inset={false} testID="note-reminder-options">
+          {reminderOpts.map(opt => {
+            const current = reminderAt != null && opt.ms === reminderAt
+            return (
+              <InsetRow
+                key={opt.label}
+                icon={Alarm1Outlined}
+                title={opt.label}
+                subtitle={opt.sub}
+                onPress={() => void handleSetReminder(opt.ms)}
+                chevron={false}
+                trailing={current ? <Lineicons icon={CheckOutlined} size={16} color={t.accentText} /> : undefined}
+              />
+            )
+          })}
+        </InsetGroup>
         {hasActiveReminder ? (
           <View style={{ marginTop: spacing.md }}>
             <Button variant="danger" label="Remove reminder" fullWidth onPress={() => void handleSetReminder(null)} />

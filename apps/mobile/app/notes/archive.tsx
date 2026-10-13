@@ -6,11 +6,11 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 import { useNotes, type Note } from '../../hooks/useNotes'
 import { Screen } from '../../components/ui/Screen'
-import { PageTitle } from '../../components/ui/PageTitle'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
+import { LargeTitleHeader } from '../../components/navigation/LargeTitleHeader'
 import { NoteCard } from '../../components/notes/NoteCard'
 import { NotesGrid, NotesSkeleton } from '../../components/notes/NotesGrid'
 import { confirmAction } from '../../utils/confirmAction'
@@ -71,7 +71,9 @@ export default function ArchiveScreen() {
   return (
     <Screen width="wide" header={<DetailTopBar bare fallbackHref="/notes" />}>
       <Stack.Screen options={{ headerShown: false }} />
-      <PageTitle title="Archive" lead="Notes you have set aside. Unarchive one to bring it back to your notes." />
+      <View style={{ marginBottom: spacing.lg }}>
+        <LargeTitleHeader collapses={false} title="Archive" subtitle="Notes you have set aside. Unarchive one to bring it back to your notes." />
+      </View>
       {body}
     </Screen>
   )

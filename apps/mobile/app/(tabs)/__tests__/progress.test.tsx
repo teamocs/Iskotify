@@ -38,6 +38,14 @@ describe('Progress tab', () => {
     expect(scroll.findAll((n: any) => n.props.accessibilityRole === 'header' && n.props.children === 'Progress')).not.toHaveLength(0)
   })
 
+  // Review: the first figures (exam readiness, streak, sessions) are all-time,
+  // so a "This week" eyebrow over them would misstate their scope.
+  it('has no eyebrow claiming a time scope the figures do not have', () => {
+    render(<ProgressScreen />)
+    expect(screen.queryByTestId('large-title-eyebrow')).toBeNull()
+    expect(screen.queryByText('This week')).toBeNull()
+  })
+
   it('has the Profile avatar in its header', () => {
     const { router } = require('expo-router')
     render(<ProgressScreen />)

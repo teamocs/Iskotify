@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
 // RN Image is fine for a local screenshot preview.
 // react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image } from 'react-native'
@@ -7,12 +7,13 @@ import * as DocumentPicker from 'expo-document-picker'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Camera1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, weight } from '../../theme/tokens'
 import { InfoPage } from '../../components/info/InfoPage'
 import { StatusPanel } from '../../components/auth/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { FilterChip } from '../../components/ui/Chip'
 import { TextField } from '../../components/ui/TextField'
+import { Text } from '../../components/ui/Text'
 import { goBackOr } from '../../components/explore/DetailTopBar'
 import { submitBugReport } from '../../services/appFeedback'
 
@@ -72,7 +73,7 @@ export default function ReportBugScreen() {
       <InfoPage title="Report a bug">
         <View style={{ gap: spacing.lg }}>
           <StatusPanel tone="success" title="Report sent. Salamat!">
-            <Text style={textStyle('bodySm', t.textSecondary)}>
+            <Text role="footnote" color={t.textSecondary}>
               Thanks for helping make Iskotify better. We&apos;ll look into it as soon as we can.
             </Text>
           </StatusPanel>
@@ -86,7 +87,7 @@ export default function ReportBugScreen() {
     <InfoPage title="Report a bug" lead="Found something broken? Tell us what happened and we'll fix it.">
       <View style={{ gap: spacing.xl }}>
         <View style={{ gap: spacing.sm }}>
-          <Text style={textStyle('label', t.textPrimary)}>Where did it happen?</Text>
+          <Text role="footnote" style={weight('600')}>Where did it happen?</Text>
           <View accessibilityRole="radiogroup" accessibilityLabel="Where did it happen?" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
             {AREAS.map(a => (
               <FilterChip key={a} label={a} selected={area === a} onPress={() => setArea(a)} />
@@ -111,7 +112,7 @@ export default function ReportBugScreen() {
               accessibilityIgnoresInvertColors
               accessibilityLabel="Attached screenshot"
             />
-            <Text style={[textStyle('bodySm', t.textPrimary), { flex: 1 }]} numberOfLines={1}>{image.name}</Text>
+            <Text role="footnote" style={{ flex: 1 }} numberOfLines={1}>{image.name}</Text>
             <Button label="Remove" variant="ghost" size="sm" accessibilityLabel="Remove screenshot" onPress={() => setImage(null)} />
           </View>
         ) : (
@@ -125,7 +126,7 @@ export default function ReportBugScreen() {
         )}
 
         {error ? (
-          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={textStyle('bodySm', t.danger)}>
+          <Text role="footnote" color={t.danger} accessibilityRole="alert" accessibilityLiveRegion="polite">
             {error}
           </Text>
         ) : null}

@@ -1,9 +1,9 @@
-import { View, Text } from 'react-native'
-import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { View } from 'react-native'
+import { radius, spacing } from '../../theme/tokens'
 import { useBreakpoint, type Breakpoint } from '../../hooks/useBreakpoint'
 import { Skeleton } from '../ui/Skeleton'
 import { heading } from '../ui/a11y'
+import { Text } from '../ui/Text'
 
 /** Note columns per size class: 1 on phones, 2 on tablets, 3 on desktop. */
 export function noteColumns(bp: Breakpoint): 1 | 2 | 3 {
@@ -45,9 +45,8 @@ export function NotesGrid<T>({ items, keyOf, renderItem, columns }: Props<T>) {
 
 /** A level-2 section heading inside a notes page. */
 export function NotesSectionHeading({ title }: { title: string }) {
-  const { theme: t } = useTheme()
   return (
-    <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
+    <Text role="headline" {...heading(2)} style={{ marginBottom: spacing.sm }}>
       {title}
     </Text>
   )
