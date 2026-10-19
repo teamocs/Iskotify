@@ -26,14 +26,14 @@
     "@iskotify/utils": "workspace:*"
   },
   "peerDependencies": {
-    "nativewind": "^4.1.23",
+    "nativewind": "^4.2.7",
     "react": ">=19.0.0",
     "react-native": ">=0.79.0"
   },
   "devDependencies": {
     "@iskotify/tsconfig": "workspace:*",
     "@types/react": "~19.2.10",
-    "nativewind": "^4.1.23",
+    "nativewind": "^4.2.7",
     "react": "19.2.0",
     "react-native": "0.83.10",
     "rimraf": "^6.0.1",
