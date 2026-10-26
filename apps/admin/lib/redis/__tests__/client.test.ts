@@ -24,4 +24,14 @@ describe('getRedis', () => {
     expect(retry).toBeDefined()
     expect(retry === false || (retry!.retries ?? 5) <= 1).toBe(true)
   })
+
+  it('falls back to the Vercel Marketplace KV_* names', async () => {
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+    process.env.KV_REST_API_URL = 'https://kv.upstash.io'
+    process.env.KV_REST_API_TOKEN = 'kv'
+    const { getRedis } = await import('../client')
+    expect(getRedis()).not.toBeNull()
+    expect(ctor.mock.calls[0]![0]).toMatchObject({ url: 'https://kv.upstash.io', token: 'kv' })
+  })
 })
