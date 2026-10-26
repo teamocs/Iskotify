@@ -28,6 +28,14 @@ updates:
       - dependency-name: "@react-native-*/*"
       - dependency-name: "react"
       - dependency-name: "react-dom"
+      # Must equal the react version exactly or every RNTL suite fails to run.
+      - dependency-name: "react-test-renderer"
+      # Babel 8 waits for an Expo SDK built on it; @types/jest tracks the
+      # Jest 29 runtime that jest-expo pins.
+      - dependency-name: "@babel/*"
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/jest"
+        update-types: [version-update:semver-major]
       # Framework majors are planned upgrades, not automatic bumps.
       - dependency-name: "next"
         update-types: [version-update:semver-major]
