@@ -128,6 +128,8 @@ export const MIGRATIONS = [
     acquired_at INTEGER NOT NULL,
     PRIMARY KEY (listing_slug, requirement_index)
   )`,
+  // Legacy: unused since focus mode was removed; not in db/schema.ts. Kept so the
+  // append-only migration history stays intact.
   `ALTER TABLE user_settings ADD COLUMN focus_mode_enabled INTEGER NOT NULL DEFAULT 1`,
   `CREATE TABLE IF NOT EXISTS notes (
     id TEXT PRIMARY KEY NOT NULL,
