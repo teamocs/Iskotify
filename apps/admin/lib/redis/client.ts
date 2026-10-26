@@ -9,10 +9,13 @@ let cached: Redis | null = null
  */
 export function getRedis(): Redis | null {
   if (cached) return cached
-  const url = process.env.UPSTASH_REDIS_REST_URL
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN
+  // KV_* are the names the Vercel Marketplace Upstash integration injects.
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN
   if (!url || !token) return null
-  cached = new Redis({ url, token })
+  // One quick retry: the default (5 with exponential backoff) stalled every
+  // request ~24s when the database was unreachable, and callers fall through anyway.
+  cached = new Redis({ url, token, retry: { retries: 1, backoff: () => 100 } })
   return cached
 }
 
