@@ -187,6 +187,12 @@ describe('ListingDetailScreen — exam', () => {
     expect(screen.getByTestId('large-title-eyebrow').props.children).toBe('Entrance exam')
   })
 
+  it('says Iskotify is not affiliated with the provider, beside the verification badge', async () => {
+    render(<ListingDetailScreen />)
+    await screen.findByRole('header', { name: 'UPCAT 2025' })
+    expect(screen.getByText(/Iskotify isn’t affiliated with or endorsed by UP System\. Details change every year\./)).toBeTruthy()
+  })
+
   it('names no official source when the listing has no external_url', async () => {
     render(<ListingDetailScreen />)
     await screen.findByTestId('listing-key-facts')

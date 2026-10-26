@@ -163,7 +163,7 @@ describe('Privacy copy (shared with the website via @iskotify/utils/privacy-poli
   it('shows the same "last updated" date as the website', () => {
     render(<PrivacyScreen />)
     expect(screen.getByText(`Privacy policy. Last updated: ${PRIVACY_LAST_UPDATED}`)).toBeTruthy()
-    expect(PRIVACY_LAST_UPDATED).toBe('October 1, 2026')
+    expect(PRIVACY_LAST_UPDATED).toBe('October 27, 2026')
   })
 
   it('drops the retired AI Coach and the Export-Data-in-Settings claim', () => {

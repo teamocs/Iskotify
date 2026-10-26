@@ -148,6 +148,12 @@ describe('SchoolProfileScreen', () => {
     expect(router.dismiss).not.toHaveBeenCalled()
   })
 
+  it('says Iskotify is not affiliated with the school', async () => {
+    render(<SchoolProfileScreen />)
+    await screen.findByRole('header', { name: 'University of the Philippines Diliman' })
+    expect(screen.getByText('Iskotify isn’t affiliated with or endorsed by University of the Philippines Diliman.')).toBeTruthy()
+  })
+
   it('titles the sheet with the school name as its header, over a maroon hero band and a 72pt logo tile', async () => {
     render(<SchoolProfileScreen />)
     expect(await screen.findByRole('header', { name: 'University of the Philippines Diliman' })).toBeTruthy()

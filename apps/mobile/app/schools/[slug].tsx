@@ -504,6 +504,8 @@ export default function SchoolProfileScreen() {
 
           {segment === 'overview' ? overview : segment === 'courses' ? courses : admissions}
 
+          <Text role="caption" color={t.textSecondary}>Iskotify isn’t affiliated with or endorsed by {school.name}.</Text>
+
           {lowConfidence ? (
             <View
               style={{

@@ -509,7 +509,7 @@ export default function ListingDetailScreen() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }}>
           <Badge label={listing.isVerified ? 'Verified' : 'Unverified'} tone={listing.isVerified ? 'success' : 'neutral'} />
           <Text role="caption" color={t.textSecondary} style={{ flex: 1, minWidth: 180 }}>
-            Details change every year. Check the official site before you apply.
+            {listing.provider ? `Iskotify isn’t affiliated with or endorsed by ${listing.provider}. ` : ''}Details change every year. Check the official site before you apply.
           </Text>
         </View>
       </View>
