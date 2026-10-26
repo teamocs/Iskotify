@@ -10,7 +10,7 @@
 // date together. packages/utils/src/__tests__/privacyPolicy.test.ts guards the
 // structure and the claims that must (or must never) appear.
 
-export const PRIVACY_LAST_UPDATED = 'October 1, 2026'
+export const PRIVACY_LAST_UPDATED = 'October 27, 2026'
 export const PRIVACY_CONTACT_EMAIL = 'teamocsph@gmail.com'
 export const NPC_WEBSITE = 'privacy.gov.ph'
 
@@ -22,8 +22,10 @@ export const DPO_NAME = ''
 /** Set only once the inbox works; until then the DPO is reached at PRIVACY_CONTACT_EMAIL. */
 export const DPO_EMAIL = ''
 export const BUSINESS_ADDRESS = ''
-export const SUPABASE_REGION = ''
-export const UPSTASH_REGION = ''
+// Supabase project dtugrsbarruizgzowgso: AWS ap-northeast-1 (Tokyo). Upstash
+// "iskotify-redis" via the Vercel Marketplace: iad1 (N. Virginia).
+export const SUPABASE_REGION = 'Japan'
+export const UPSTASH_REGION = 'United States'
 
 /** " Servers: <region>." once the region is known, otherwise nothing. */
 const servers = (region: string) => (region ? ` Servers: ${region}.` : '')

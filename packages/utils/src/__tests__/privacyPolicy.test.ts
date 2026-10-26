@@ -18,7 +18,7 @@ const section = (title: string) => JSON.stringify(PRIVACY_SECTIONS.find(s => s.t
 
 describe('privacy policy content (shared by the app and the website)', () => {
   it('carries the current "last updated" date and the contact address', () => {
-    expect(PRIVACY_LAST_UPDATED).toBe('October 1, 2026')
+    expect(PRIVACY_LAST_UPDATED).toBe('October 27, 2026')
     expect(PRIVACY_CONTACT_EMAIL).toBe('teamocsph@gmail.com')
     expect(text).toContain('teamocsph@gmail.com')
   })

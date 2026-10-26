@@ -3,6 +3,7 @@
   "git": { "deploymentEnabled": { "master": true, "**": false } },
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages ../../pnpm-lock.yaml ../../package.json",
   "crons": [
-    { "path": "/api/kb/drive-sync", "schedule": "0 18 * * *" }
+    { "path": "/api/kb/drive-sync", "schedule": "0 18 * * *" },
+    { "path": "/api/retention/purge", "schedule": "30 19 * * *" }
   ]
 }

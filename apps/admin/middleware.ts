@@ -14,6 +14,7 @@ const OPERATOR_ENDPOINTS = [
   '/api/places/school-search',  // mobile-accessible
   '/api/search/listings',       // mobile-accessible (legacy listing search; no AI provider)
   '/api/kb/drive-sync',         // Vercel Cron (Bearer CRON_SECRET) or admin session — checked in the route
+  '/api/retention/purge',       // Vercel Cron only (Bearer CRON_SECRET) — checked in the route
 ]
 
 // Called by signed-in STUDENTS with their bearer token, verified inside the route.

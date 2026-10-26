@@ -25,6 +25,7 @@ const OPERATOR_PATHS = [
   '/api/places/school-search',
   '/api/search/listings',
   '/api/kb/drive-sync',
+  '/api/retention/purge',
 ]
 
 describe('middleware operator endpoints', () => {

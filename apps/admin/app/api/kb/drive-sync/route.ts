@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { timingSafeEqual } from 'crypto'
 import { createServerClient } from '@iskotify/utils'
+import { isCron } from '@/lib/cron/isCron'
 import { requireAdmin } from '@/lib/admin/requireAdmin'
 import { createDriveGateway, createMediaStore } from '@/lib/kb/driveClient'
 import type { DriveGateway } from '@/lib/kb/syncDriveFolder'
@@ -17,16 +17,9 @@ export const maxDuration = 60 // Vercel cap — see TIME_BUDGET_MS
 // Anything left is picked up by the next run (the ledger makes it resumable).
 const TIME_BUDGET_MS = 45_000
 
-// Vercel Cron calls GET with `Authorization: Bearer $CRON_SECRET`. This path is
-// exempt from the session middleware, so it must authenticate itself: either
-// that secret or an admin session (the "Sync now" button).
-function isCron(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret) return false
-  const got = Buffer.from(req.headers.get('authorization') ?? '')
-  const want = Buffer.from(`Bearer ${secret}`)
-  return got.length === want.length && timingSafeEqual(got, want)
-}
+// Vercel Cron calls GET with `Authorization: Bearer $CRON_SECRET` (isCron). This
+// path is exempt from the session middleware, so it must authenticate itself:
+// either that secret or an admin session (the "Sync now" button).
 
 // GET is the cron path only. An admin session is accepted on POST alone, so a
 // link or <img> loaded in a signed-in admin's browser cannot trigger a sync.
