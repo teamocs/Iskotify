@@ -28,6 +28,8 @@ updates:
       - dependency-name: "@react-native-*/*"
       - dependency-name: "react"
       - dependency-name: "react-dom"
+      # Must equal the react version exactly or every RNTL suite fails to run.
+      - dependency-name: "react-test-renderer"
       # Framework majors are planned upgrades, not automatic bumps.
       - dependency-name: "next"
         update-types: [version-update:semver-major]
