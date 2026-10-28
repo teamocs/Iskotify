@@ -26,6 +26,9 @@ export function configureStore(): void {
   if (configured) return
   const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
   if (Platform.OS !== 'android' || !apiKey) return
+  // RevenueCat's SDK crashes non-debuggable builds (preview APK, Play tracks)
+  // that use a Test Store key (test_…). A misplaced key leaves purchases off.
+  if (apiKey.startsWith('test_') && !__DEV__) return
   try {
     Purchases.configure({ apiKey })
     configured = true

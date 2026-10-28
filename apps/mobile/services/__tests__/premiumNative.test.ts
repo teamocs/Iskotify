@@ -74,6 +74,26 @@ describe('configure', () => {
     m.configureStore()
     expect(m.storeAvailable()).toBe(true)
   })
+
+  it('uses a Test Store key only in dev builds (release builds crash on one)', () => {
+    const g = globalThis as { __DEV__?: boolean }
+    const dev = g.__DEV__
+    process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = 'test_key'
+    try {
+      g.__DEV__ = false
+      let m = load()
+      m.configureStore()
+      expect(P.configure).not.toHaveBeenCalled()
+      expect(m.storeAvailable()).toBe(false)
+
+      g.__DEV__ = true
+      m = load()
+      m.configureStore()
+      expect(P.configure).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'test_key' }))
+    } finally {
+      g.__DEV__ = dev
+    }
+  })
 })
 
 describe('identity', () => {
