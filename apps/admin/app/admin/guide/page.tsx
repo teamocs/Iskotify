@@ -1,7 +1,8 @@
 import { Topbar } from '@/components/admin/Topbar'
 import { PageBody } from '@/components/ui/Page'
 import { Card } from '@/components/ui/Card'
-import { TABLE_FRAME, THead, Table, TableRegion, Td, Th, Tr } from '@/components/ui/Table'
+import { THead, Table, TableRegion, Td, Th, Tr } from '@/components/ui/Table'
+import { TABLE_FRAME } from '@/components/ui/tableStyles'
 import { DATA_TABLE_MAP, type DataTableConfig, type DataTableColumnConfig } from '@/lib/dataTables'
 import { exportColumnNames } from '@/lib/dataTables/serialization'
 
