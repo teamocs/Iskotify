@@ -39,7 +39,6 @@ describe('Expo project ownership', () => {
   it('ships no on-device AI or background-download plugins', () => {
     const names = app.plugins.map((p: string | [string, unknown]) => (Array.isArray(p) ? p[0] : p))
     expect(names).not.toContain('@kesha-antonov/react-native-background-downloader')
-    expect(names).not.toContain('expo-build-properties')
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
     const deps = { ...pkg.dependencies, ...pkg.devDependencies }
     expect(deps['llama.rn']).toBeUndefined()
@@ -69,5 +68,39 @@ describe('Expo project ownership', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
     expect(pkg.dependencies['react-native-purchases']).toBeDefined()
     expect(app.android.blockedPermissions).not.toContain('com.android.vending.BILLING')
+  })
+})
+
+// Install size and device reach, set on purpose instead of inherited defaults.
+// minSdk 24 (Android 7.0) is the lowest React Native 0.83 supports, so older
+// phones common in the Philippines still install. targetSdk 36 meets Google
+// Play's target API rule. iOS 15.1 is the Expo SDK 55 floor. R8 and resource
+// shrinking cut unused Java/Kotlin code and resources from release builds
+// (preview APK and production AAB). Hermes stays on (the SDK default) and the
+// AAB lets Play serve each device only its own ABI.
+describe('Native build properties', () => {
+  const entry = app.plugins.find((p: string | [string, unknown]) => Array.isArray(p) && p[0] === 'expo-build-properties')
+  const props = entry?.[1]
+
+  it('pins Android SDK levels deliberately', () => {
+    expect(props.android).toMatchObject({ minSdkVersion: 24, compileSdkVersion: 36, targetSdkVersion: 36 })
+  })
+
+  it('minifies and shrinks release builds', () => {
+    expect(props.android.enableMinifyInReleaseBuilds).toBe(true)
+    expect(props.android.enableShrinkResourcesInReleaseBuilds).toBe(true)
+  })
+
+  // Native libraries stay uncompressed and 16 KB aligned (Android 15+ devices
+  // with 16 KB pages), every ABI ships in the AAB, and JS stays Hermes bytecode.
+  it('keeps 16 KB-ready packaging, all ABIs and Hermes', () => {
+    expect(props.android.useLegacyPackaging).toBeUndefined()
+    expect(props.android.buildArchs).toBeUndefined()
+    expect(app.jsEngine).toBeUndefined()
+    expect(app.android.jsEngine).toBeUndefined()
+  })
+
+  it('targets iOS 15.1', () => {
+    expect(props.ios.deploymentTarget).toBe('15.1')
   })
 })
