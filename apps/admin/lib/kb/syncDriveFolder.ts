@@ -40,8 +40,9 @@ export interface DriveEntry {
 export interface DriveGateway {
   /** With a deadline, stops (throws) instead of starting another page past it. */
   listTree(rootId: string, opts?: { deadline?: number }): Promise<DriveEntry[]>
-  /** With maxBytes, stops reading past the cap and throws FileTooLargeError (./fileTooLarge). */
-  downloadText(entry: DriveEntry, opts?: { maxBytes?: number }): Promise<string>
+  /** With maxBytes, stops reading past the cap and throws FileTooLargeError (./fileTooLarge).
+   *  format 'markdown' exports a native Google Doc as markdown (headings, bold) instead of plain text. */
+  downloadText(entry: DriveEntry, opts?: { maxBytes?: number; format?: 'markdown' }): Promise<string>
   downloadBytes(entry: DriveEntry): Promise<Buffer>
 }
 

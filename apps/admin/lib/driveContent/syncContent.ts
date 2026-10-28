@@ -8,6 +8,8 @@
 //   announcements  each Google Doc → plain text → AI extraction, validated
 //                  against the text (lib/announcements/extract.ts) → an
 //                  announcement_import_batches preview.
+//   blog           each Google Doc → markdown → parseBlogDoc (no AI) → a
+//                  blog_import_batches preview (migration 069).
 //
 // Nothing goes live here: an admin publishes each preview from /admin/sync.
 // drive_content_files is the per-file ledger (migration 068): an unchanged file
@@ -25,8 +27,9 @@ import { geminiAsk, type AskModel } from '../ai/mapColumns'
 import { planImport, looksLikeListingHeader } from '../listings/planImport'
 import { EXISTING_LISTING_COLUMNS } from '../listings/types'
 import { extractAnnouncements, diffAnnouncements } from '../announcements/extract'
+import { parseBlogDoc, type BlogPostDraft } from '../blog/parseDoc'
 
-export type ContentType = 'listings' | 'announcements'
+export type ContentType = 'listings' | 'announcements' | 'blog'
 
 export interface ContentSource {
   id: string | null
@@ -262,6 +265,9 @@ export async function syncContentSources(
       } else if (source.contentType === 'listings') {
         const r = await listingsFile(db, drive, e, { ask, getListings, maxBytes })
         await record(r.status, r.message, r.batchId)
+      } else if (source.contentType === 'blog') {
+        const r = await blogFile(db, drive, e)
+        await record(r.status, r.message, r.batchId)
       } else {
         const r = await announcementsFile(db, drive, e, { ask, aiLeft: () => aiLeft })
         await record(r.status, r.message, r.batchId)
@@ -281,7 +287,7 @@ export async function syncContentSources(
 
 interface FileResult { status: ContentStatus; message: string | null; batchId?: string | null }
 
-async function discardLivePreview(db: SupabaseClient, table: 'listing_import_batches' | 'announcement_import_batches', driveFileId: string) {
+async function discardLivePreview(db: SupabaseClient, table: 'listing_import_batches' | 'announcement_import_batches' | 'blog_import_batches', driveFileId: string) {
   const { error } = await db
     .from(table)
     .update({ status: 'discarded', discarded_at: new Date().toISOString() })
@@ -420,6 +426,56 @@ async function announcementsFile(
   return {
     status: 'previewed',
     message: `${counts.new} new · ${counts.update} updated${skippedNote}`,
+    batchId: String((data as { id: string | number }).id),
+  }
+}
+
+interface LivePost {
+  id: string; drive_file_id: string; slug: string; title: string; meta_title: string | null; meta_description: string | null
+  body_md: string; faq: unknown; author_name: string | null; author_bio: string | null
+}
+
+const POST_FIELDS = 'id, drive_file_id, slug, title, meta_title, meta_description, body_md, faq, author_name, author_bio'
+
+function samePost(live: LivePost, p: BlogPostDraft): boolean {
+  return live.slug === p.slug && live.title === p.title && live.meta_title === p.metaTitle
+    && live.meta_description === p.metaDescription && live.body_md === p.bodyMd
+    && JSON.stringify(live.faq) === JSON.stringify(p.faq)
+    && live.author_name === p.authorName && live.author_bio === p.authorBio
+}
+
+async function blogFile(db: SupabaseClient, drive: DriveGateway, e: DriveEntry): Promise<FileResult> {
+  if (!isDocLike(e)) {
+    return { status: 'skipped', message: 'Blog posts are read from Google Docs — save the post as a Google Doc (File → Save as Google Docs).' }
+  }
+  const parsed = parseBlogDoc(await drive.downloadText(e, { maxBytes: REPORT_MAX_BYTES, format: 'markdown' }))
+  // A Doc that can't be read is held (listed under Needs attention) until it is fixed in Drive.
+  if (!parsed.ok) return { status: 'held', message: parsed.message }
+  const { post, flags } = parsed
+
+  const byFile = await db.from('blog_posts').select(POST_FIELDS).eq('drive_file_id', e.id)
+  if (byFile.error) throw new Error(`blog_posts read failed: ${byFile.error.message}`)
+  const live = ((byFile.data ?? []) as LivePost[])[0]
+  const bySlug = await db.from('blog_posts').select('id, drive_file_id').eq('slug', post.slug)
+  if (bySlug.error) throw new Error(`blog_posts read failed: ${bySlug.error.message}`)
+  if (((bySlug.data ?? []) as { drive_file_id: string }[]).some(r => r.drive_file_id !== e.id)) {
+    return { status: 'held', message: `The slug /blog/${post.slug} is already used by another post — give this Doc its own slug.` }
+  }
+
+  await discardLivePreview(db, 'blog_import_batches', e.id)
+  if (live && samePost(live, post)) return { status: 'no_changes', message: `/blog/${post.slug} already matches what is live.` }
+
+  const action = live ? 'update' : 'new'
+  const { data, error } = await db
+    .from('blog_import_batches')
+    .insert({ drive_file_id: e.id, file_name: e.name, status: 'preview', action, post, flags })
+    .select('id')
+    .single()
+  if (error) throw new Error(`blog_import_batches insert failed: ${error.message}`)
+  const flagNote = flags.length ? ` · ${plural(flags.length, 'claim')} to check` : ''
+  return {
+    status: 'previewed',
+    message: `${action === 'new' ? 'New post' : 'Updated post'} · /blog/${post.slug}${flagNote}`,
     batchId: String((data as { id: string | number }).id),
   }
 }

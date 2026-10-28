@@ -9,10 +9,12 @@ export function describeContentSync(content: ContentSyncSummary | { error: strin
   const count = (type: string, status: string) => content.files.filter(f => f.contentType === type && f.status === status).length
   const listings = count('listings', 'previewed')
   const announcements = count('announcements', 'previewed')
+  const posts = count('blog', 'previewed')
   const attention = content.files.filter(f => f.status === 'held' || f.status === 'error').length
   const parts = [
     listings ? plural(listings, 'listings preview') : '',
     announcements ? plural(announcements, 'announcement preview') : '',
+    posts ? plural(posts, 'blog preview') : '',
     attention ? `${attention} need attention` : '',
     content.sourceErrors.length ? `${plural(content.sourceErrors.length, 'folder')} unreadable` : '',
     content.remaining ? `${content.remaining} left for the next run` : '',

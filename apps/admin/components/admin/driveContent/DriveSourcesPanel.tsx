@@ -27,6 +27,7 @@ const TYPE_HINT: Record<DriveContentType, string> = {
   questions: 'CSV, Excel or Google Sheets of questions — previewed under Questions above.',
   listings: 'Google Sheets, CSV or Excel of exams and scholarships — one preview per file.',
   announcements: 'Weekly admissions report Google Docs — the AI reads each into announcements for you to review.',
+  blog: 'Blog post Google Docs (front matter with title and slug) — each becomes a post preview; nothing goes live until you publish it.',
 }
 
 function FolderLink({ id }: { id: string }) {

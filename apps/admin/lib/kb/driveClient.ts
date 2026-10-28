@@ -95,14 +95,14 @@ export function createDriveGateway(credentialsJson = process.env.GOOGLE_SERVICE_
     },
 
     async downloadText(entry, opts = {}) {
-      const { maxBytes } = opts
+      const { maxBytes, format } = opts
       // Native Google files report no size, so a capped read streams and stops
       // at the cap instead of buffering the whole export.
       if (maxBytes !== undefined && (entry.size ?? 0) > maxBytes) throw new FileTooLargeError(maxBytes)
       const exportAs = entry.mimeType === SHEET_MIME
         ? 'text/csv' // the first sheet of a native Google Sheet
         : entry.mimeType === DOC_MIME
-          ? 'text/plain' // a native Google Doc (e.g. a weekly admissions report)
+          ? (format === 'markdown' ? 'text/markdown' : 'text/plain') // a native Google Doc (a blog post / a weekly admissions report)
           : null
       if (maxBytes === undefined) {
         const res = exportAs
