@@ -10,6 +10,18 @@ describe('EAS build profiles', () => {
     expect(eas.build.production.android.buildType).toBe('app-bundle')
   })
 
+  // A universal APK carries every ABI's native libraries. Phones that can run
+  // minSdk 24 are arm (x86 Android phones stopped at Android 6), so the
+  // sideloaded preview APK builds only the two arm ABIs. Development keeps x86
+  // for emulators; the production AAB keeps all four and Play splits them.
+  it('builds the preview APK for arm phones only', () => {
+    expect(eas.build.preview.android.gradleCommand).toBe(
+      ':app:assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a',
+    )
+    expect(eas.build.development.android.gradleCommand).toBeUndefined()
+    expect(eas.build.production.android.gradleCommand).toBeUndefined()
+  })
+
   it('keeps APKs for development and preview installs', () => {
     expect(eas.build.development.android.buildType).toBe('apk')
     expect(eas.build.preview.android.buildType).toBe('apk')

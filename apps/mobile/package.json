@@ -28,6 +28,7 @@
     "expo": "~55.0.31",
     "expo-application": "~55.0.19",
     "expo-blur": "~55.0.18",
+    "expo-build-properties": "~55.0.18",
     "expo-constants": "~55.0.17",
     "expo-device": "~55.0.21",
     "expo-document-picker": "~55.0.17",
