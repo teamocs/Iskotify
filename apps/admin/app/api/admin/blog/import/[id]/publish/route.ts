@@ -58,12 +58,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       body_md: p.bodyMd, faq: p.faq, author_name: p.authorName, author_bio: p.authorBio, status: 'published',
     }, { onConflict: 'drive_file_id' })
     if (writeError) {
-      // Put the batch back so it can be published again.
+      // Put the batch back so it can be published again. If a newer preview of
+      // the same Doc arrived meanwhile (one live preview per file), discard this one.
       const { error: revertError } = await db
         .from('blog_import_batches')
         .update({ status: 'preview', published_at: null, published_by: null })
         .eq('id', id)
-      if (revertError) console.error('[admin/blog/import/[id]/publish] revert failed:', revertError)
+        .eq('status', 'published')
+      if (revertError) {
+        console.error('[admin/blog/import/[id]/publish] revert failed:', revertError)
+        await db.from('blog_import_batches').update({ status: 'discarded', discarded_at: new Date().toISOString() }).eq('id', id)
+      }
       if ((writeError as { code?: string }).code === '23505') {
         return NextResponse.json({ error: `Another post already uses /blog/${p.slug} — change the slug in the Doc.` }, { status: 409 })
       }

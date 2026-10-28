@@ -35,6 +35,15 @@ BEGIN
   LOOP
     EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.tbl, r.conname);
   END LOOP;
+  -- A differently shaped leftover would silently keep blocking 'blog'.
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE contype = 'c'
+      AND conrelid IN ('public.drive_sources'::regclass, 'public.drive_content_files'::regclass)
+      AND pg_get_constraintdef(oid) LIKE '%content_type%'
+  ) THEN
+    RAISE EXCEPTION 'content_type check not fully dropped';
+  END IF;
 END $$;
 
 ALTER TABLE public.drive_sources
@@ -68,7 +77,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS blog_import_batches_one_preview
 -- 3. Live posts. Read only server-side (service role); never exposed to the app keys.
 CREATE TABLE IF NOT EXISTS public.blog_posts (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug                text NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  slug                text NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND char_length(slug) <= 120),
   drive_file_id       text NOT NULL UNIQUE,
   title               text NOT NULL,
   meta_title          text,

@@ -54,6 +54,33 @@ describe('parseBlogDoc', () => {
     expect(bad).toEqual({ ok: false, message: expect.stringMatching(/slug/i) })
   })
 
+  it('keeps multi-paragraph FAQ answers whole, and a bold lead-in is not a new question', () => {
+    const faqDoc = doc.replace(
+      '**Sapat na ba ang isang book?** It has been enough for documented passers.',
+      '**Sapat na ba ang isang book?** It has been enough for documented passers.\n\nPlus free sessions.\n\n**Note:** check the edition.',
+    )
+    const r2 = parseBlogDoc(faqDoc)
+    if (!r2.ok) throw new Error(r2.message)
+    expect(r2.post.faq).toHaveLength(2)
+    expect(r2.post.faq[1]).toEqual({ q: 'Sapat na ba ang isang book?', a: 'It has been enough for documented passers. Plus free sessions. Note: check the edition.' })
+  })
+
+  it('keeps a horizontal rule inside the body when no author block follows it', () => {
+    const ruled = doc
+      .replace('## Where Iskotify fits', '---\n\n## Where Iskotify fits')
+      .replace(/\n---\n\nBy Bryden[\s\S]*$/, '\n')
+    const r3 = parseBlogDoc(ruled)
+    if (!r3.ok) throw new Error(r3.message)
+    expect(r3.post.bodyMd).toContain('## Where Iskotify fits')
+    expect(r3.post.bodyMd).toContain('## FAQ')
+    expect(r3.post.authorName).toBeNull()
+  })
+
+  it('rejects a slug longer than 120 characters', () => {
+    const long = parseBlogDoc(doc.replace('best-upcat-reviewer-book', 'a'.repeat(121)))
+    expect(long).toEqual({ ok: false, message: expect.stringMatching(/slug/i) })
+  })
+
   it('rejects a Doc with no front matter', () => {
     expect(parseBlogDoc('# Just a title\n\nSome text.')).toEqual({ ok: false, message: expect.stringMatching(/front matter|title/i) })
   })

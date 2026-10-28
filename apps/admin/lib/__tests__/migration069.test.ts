@@ -32,7 +32,11 @@ describe('migration 069: blog posts', () => {
   })
 
   it('accepts only lowercase dashed slugs, each used once', () => {
-    expect(code).toMatch(/slug\s+text NOT NULL UNIQUE CHECK \(slug ~ '\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$'\)/)
+    expect(code).toMatch(/slug\s+text NOT NULL UNIQUE CHECK \(slug ~ '\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$' AND char_length\(slug\) <= 120\)/)
+  })
+
+  it('fails loudly if an old content_type check survives the drop', () => {
+    expect(code).toContain("RAISE EXCEPTION 'content_type check not fully dropped'")
   })
 
   it('delete_user_data also unlinks the announcement and blog publishers', () => {

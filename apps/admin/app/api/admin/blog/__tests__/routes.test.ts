@@ -101,6 +101,17 @@ describe('POST /api/admin/blog/import/[id]/publish', () => {
   })
 })
 
+describe('POST publish — revert edge cases', () => {
+  it('reverts only a batch it published, and discards it if the revert fails', async () => {
+    queues.blog_import_batches = [{ data: batch() }, { data: [{ id: UUID }] }, { data: null, error: { code: '23505', message: 'one preview' } }, { data: null }]
+    queues.blog_posts = [{ data: [] }, { data: null, error: { message: 'boom' } }]
+    const res = await (await import('../import/[id]/publish/route')).POST(req(), params())
+    expect(res.status).toBe(500)
+    expect(log).toEqual(['blog_import_batches.update', 'blog_posts.upsert', 'blog_import_batches.update', 'blog_import_batches.update'])
+    expect(writes[3]!.args[0]).toMatchObject({ status: 'discarded' })
+  })
+})
+
 describe('DELETE /api/admin/blog/import/[id] (discard)', () => {
   it('discards a preview without publishing anything', async () => {
     queues.blog_import_batches = [{ data: { status: 'preview' } }, { data: [{ id: UUID }] }]

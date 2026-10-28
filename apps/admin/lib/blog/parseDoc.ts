@@ -68,11 +68,15 @@ function frontMatter(text: string): Map<string, string> {
 function faqOf(body: string): BlogFaq[] {
   const m = body.match(/^##\s+(?:FAQ|Frequently asked questions)\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/im)
   if (!m) return []
-  return m[1]!
-    .split(/\n\s*\n/)
-    .map(p => p.trim().match(/^\*\*([\s\S]+?)\*\*\s*([\s\S]+)$/))
-    .filter((p): p is RegExpMatchArray => !!p)
-    .map(p => ({ q: plain(p[1]!), a: plain(p[2]!) }))
+  // A new item starts only at a bold question ("**…?**"); any other paragraph,
+  // even one opening with bold ("**Note:** …"), continues the previous answer.
+  const items: { q: string; a: string[] }[] = []
+  for (const para of m[1]!.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)) {
+    const q = para.match(/^\*\*([^*]+\?)\*\*\s*([\s\S]*)$/)
+    if (q) items.push({ q: plain(q[1]!), a: q[2] ? [q[2]] : [] })
+    else items.at(-1)?.a.push(para)
+  }
+  return items.filter(i => i.a.length).map(i => ({ q: i.q, a: plain(i.a.join(' ')) }))
 }
 
 function authorOf(tail: string[]): { name: string | null; bio: string | null } {
@@ -93,19 +97,22 @@ export function parseBlogDoc(text: string): ParseResult {
   if (!title) return { ok: false, message: 'The front matter has no title.' }
   const rawSlug = fields.get('slug') ?? ''
   const slug = rawSlug.replace(/^\/?blog\//i, '').replace(/^\/+|\/+$/g, '')
-  if (!SLUG_RE.test(slug)) {
+  if (!SLUG_RE.test(slug) || slug.length > 120) {
     return { ok: false, message: `The slug “${rawSlug || '(missing)'}” must be lowercase letters, numbers and dashes, like /blog/upcat-study-plan.` }
   }
 
-  // Body: after the front matter, up to the last fence (the author block follows it).
-  const bodyEnd = fences.length > 2 ? fences[fences.length - 1]! : lines.length
+  // Body: after the front matter, up to the last fence — but only when a "By …"
+  // byline follows it; otherwise that --- is a rule inside the post.
+  const last = fences[fences.length - 1]!
+  const hasAuthor = fences.length > 2 && lines.slice(last + 1).some(l => /^By\s+\S/.test(l.trim()))
+  const bodyEnd = hasAuthor ? last : lines.length
   const bodyLines = lines.slice(fences[1]! + 1, bodyEnd)
   const h1 = bodyLines.findIndex(l => /^#\s/.test(l))
   if (h1 !== -1) bodyLines.splice(h1, 1)
   const bodyMd = bodyLines.join('\n').trim()
   if (!bodyMd) return { ok: false, message: 'The Doc has no body under its title.' }
 
-  const author = fences.length > 2 ? authorOf(lines.slice(bodyEnd + 1)) : { name: null, bio: null }
+  const author = hasAuthor ? authorOf(lines.slice(bodyEnd + 1)) : { name: null, bio: null }
   const flags = CLAIMS.filter(c => c.re.test(bodyMd)).map(c => c.label)
 
   return {

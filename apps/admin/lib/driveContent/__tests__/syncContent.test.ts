@@ -363,6 +363,20 @@ describe('syncContentSources — blog', () => {
     expect(rows('blog_import_batches')).toHaveLength(0)
   })
 
+  it('treats FAQ objects as equal whatever key order the database returns', async () => {
+    const { db } = fakeDb({ blog_posts: [livePost({ faq: [{ a: 'Yes, the plan is free.', q: 'Is it free?' }] })] })
+    const s = await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})
+    expect(s.files[0]).toMatchObject({ status: 'no_changes' })
+  })
+
+  it('discards the old preview when the Doc is edited into something it cannot read', async () => {
+    const { db, rows } = fakeDb()
+    await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})
+    const broken = blogEntry({ modifiedTime: '2026-10-16T00:00:00Z' })
+    await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [broken] }, { 'post-1': 'no front matter' }), [BLOG], {})
+    expect(rows('blog_import_batches').map(b => b.status)).toEqual(['discarded'])
+  })
+
   it('previews an edit of a live post as an update', async () => {
     const { db, rows } = fakeDb({ blog_posts: [livePost({ title: 'Old title' })] })
     const s = await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})

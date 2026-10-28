@@ -437,10 +437,13 @@ interface LivePost {
 
 const POST_FIELDS = 'id, drive_file_id, slug, title, meta_title, meta_description, body_md, faq, author_name, author_bio'
 
+// jsonb stores object keys in its own order, so compare FAQ pairs, not raw JSON.
+const faqKey = (f: unknown) => JSON.stringify(((f ?? []) as { q: string; a: string }[]).map(x => [x.q, x.a]))
+
 function samePost(live: LivePost, p: BlogPostDraft): boolean {
   return live.slug === p.slug && live.title === p.title && live.meta_title === p.metaTitle
     && live.meta_description === p.metaDescription && live.body_md === p.bodyMd
-    && JSON.stringify(live.faq) === JSON.stringify(p.faq)
+    && faqKey(live.faq) === faqKey(p.faq)
     && live.author_name === p.authorName && live.author_bio === p.authorBio
 }
 
@@ -449,8 +452,12 @@ async function blogFile(db: SupabaseClient, drive: DriveGateway, e: DriveEntry):
     return { status: 'skipped', message: 'Blog posts are read from Google Docs — save the post as a Google Doc (File → Save as Google Docs).' }
   }
   const parsed = parseBlogDoc(await drive.downloadText(e, { maxBytes: REPORT_MAX_BYTES, format: 'markdown' }))
-  // A Doc that can't be read is held (listed under Needs attention) until it is fixed in Drive.
-  if (!parsed.ok) return { status: 'held', message: parsed.message }
+  // A Doc that can't be read is held (listed under Needs attention) until it is
+  // fixed in Drive; its older preview goes, so the outdated version can't be published.
+  if (!parsed.ok) {
+    await discardLivePreview(db, 'blog_import_batches', e.id)
+    return { status: 'held', message: parsed.message }
+  }
   const { post, flags } = parsed
 
   const byFile = await db.from('blog_posts').select(POST_FIELDS).eq('drive_file_id', e.id)
@@ -459,6 +466,7 @@ async function blogFile(db: SupabaseClient, drive: DriveGateway, e: DriveEntry):
   const bySlug = await db.from('blog_posts').select('id, drive_file_id').eq('slug', post.slug)
   if (bySlug.error) throw new Error(`blog_posts read failed: ${bySlug.error.message}`)
   if (((bySlug.data ?? []) as { drive_file_id: string }[]).some(r => r.drive_file_id !== e.id)) {
+    await discardLivePreview(db, 'blog_import_batches', e.id)
     return { status: 'held', message: `The slug /blog/${post.slug} is already used by another post — give this Doc its own slug.` }
   }
 
