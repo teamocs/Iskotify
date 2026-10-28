@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createServerClient } from '@iskotify/utils'
 import type { BlogFaq } from './parseDoc'
 
@@ -20,12 +21,13 @@ export interface BlogPost {
 
 const COLUMNS = 'id, slug, title, meta_title, meta_description, body_md, faq, author_name, author_bio, first_published_at, updated_at'
 
-export async function getPublishedPost(slug: string): Promise<BlogPost | null> {
+// cache(): generateMetadata and the page read the same post once per request.
+export const getPublishedPost = cache(async (slug: string): Promise<BlogPost | null> => {
   const { data, error } = await createServerClient()
     .from('blog_posts').select(COLUMNS).eq('slug', slug).eq('status', 'published').maybeSingle()
   if (error) throw new Error(`blog_posts read failed: ${error.message}`)
   return (data as BlogPost | null) ?? null
-}
+})
 
 export async function listPublishedPosts(): Promise<BlogPost[]> {
   const { data, error } = await createServerClient()

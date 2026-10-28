@@ -72,6 +72,12 @@ describe('/blog/[slug]', () => {
     expect(html).not.toContain('<script>alert(1)</script>')
   })
 
+  it('neutralises javascript: links from the Doc', async () => {
+    mockGetPost.mockResolvedValue({ ...POST, body_md: '[click](javascript:alert(1))' })
+    const { default: Page } = await load()
+    expect(renderToStaticMarkup(await Page(props()))).not.toContain('javascript:')
+  })
+
   it('404s a missing or unpublished post', async () => {
     mockGetPost.mockResolvedValue(null)
     const { default: Page } = await load()
@@ -96,6 +102,12 @@ describe('/blog', () => {
     const html = renderToStaticMarkup(await Index())
     expect(html).toContain('href="/blog/best-upcat-reviewer-book"')
     expect(html).toContain('What each book is for.')
+  })
+
+  it('renders the empty state instead of failing when the posts cannot be read', async () => {
+    mockListPosts.mockRejectedValue(new Error('db down'))
+    const { default: Index } = await import('../page')
+    expect(renderToStaticMarkup(await Index())).toMatch(/No posts yet/i)
   })
 
   it('says so when nothing is published yet', async () => {

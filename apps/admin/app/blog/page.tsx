@@ -14,7 +14,10 @@ export const metadata: Metadata = {
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-PH', { dateStyle: 'long', timeZone: 'Asia/Manila' })
 
 export default async function BlogIndexPage() {
-  const posts = await listPublishedPosts()
+  // Prerendered at build time: a failed read shows the empty state instead of
+  // failing the build; the next publish (revalidatePath) or the hour refills it.
+  let posts: Awaited<ReturnType<typeof listPublishedPosts>> = []
+  try { posts = await listPublishedPosts() } catch (err) { console.error('[blog] posts unavailable:', err) }
   return (
     <div className="min-h-screen bg-surface-2">
       <main className="max-w-2xl mx-auto px-6 py-14">

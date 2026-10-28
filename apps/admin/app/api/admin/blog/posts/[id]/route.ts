@@ -30,6 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     revalidatePath('/blog')
     revalidatePath(`/blog/${slug}`)
+    revalidatePath('/sitemap.xml')
     revalidatePath('/admin/sync')
     return NextResponse.json({ ok: true, status })
   } catch (err) {

@@ -78,6 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     revalidatePath('/blog')
     revalidatePath(`/blog/${p.slug}`)
     if (oldSlug && oldSlug !== p.slug) revalidatePath(`/blog/${oldSlug}`)
+    revalidatePath('/sitemap.xml')
     revalidatePath('/admin/sync')
     return NextResponse.json({ published: p.slug })
   } catch (err) {
