@@ -9,6 +9,7 @@ import type { KbFileRow, PublishEventRow, SyncRunRow } from '@/components/admin/
 import { DriveSourcesPanel } from '@/components/admin/driveContent/DriveSourcesPanel'
 import { DriveListingsCard } from '@/components/admin/driveContent/DriveListingsCard'
 import { DriveAnnouncementsCard } from '@/components/admin/driveContent/DriveAnnouncementsCard'
+import { DriveBlogCard, BLOG_POST_COLUMNS, type BlogPreview, type LivePostRow } from '@/components/admin/driveContent/DriveBlogCard'
 import { CONTENT_FILE_COLUMNS, type ContentFileRow } from '@/components/admin/driveContent/types'
 import { serviceAccountEmail } from '@/lib/google/serviceAccount'
 import { HISTORY_COLUMNS, type ImportBatch, type ImportBatchSummary } from '@/lib/listings/types'
@@ -28,7 +29,7 @@ export default async function DriveSyncPage() {
   // The layout's check doesn't stop this page's own service-role reads.
   if (!(await isAdminSession())) notFound()
   const db = createServerClient()
-  const [files, mappings, runs, events, sources, listingPreviews, listingHistory, annPreviews, annHistory, contentFiles] = await Promise.all([
+  const [files, mappings, runs, events, sources, listingPreviews, listingHistory, annPreviews, annHistory, contentFiles, blogPreviews, blogPosts] = await Promise.all([
     db.from('kb_drive_files').select(FILE_COLUMNS).order('name'),
     db.from('kb_file_mappings').select('drive_file_id, subtest'),
     db.from('kb_sync_runs').select('*').order('started_at', { ascending: false }).limit(30),
@@ -39,6 +40,8 @@ export default async function DriveSyncPage() {
     db.from('announcement_import_batches').select('*').eq('status', 'preview').order('created_at', { ascending: false }),
     db.from('announcement_import_batches').select(ANNOUNCEMENT_HISTORY_COLUMNS).in('status', ['published', 'discarded']).order('created_at', { ascending: false }).limit(30),
     db.from('drive_content_files').select(CONTENT_FILE_COLUMNS).in('status', ['held', 'error', 'skipped']).order('name'),
+    db.from('blog_import_batches').select('id, drive_file_id, file_name, action, created_at, flags, post').eq('status', 'preview').order('created_at', { ascending: false }),
+    db.from('blog_posts').select(BLOG_POST_COLUMNS).order('first_published_at', { ascending: false }),
   ])
 
   const mapped = new Map(((mappings.data ?? []) as { drive_file_id: string; subtest: string }[]).map(m => [m.drive_file_id, m.subtest]))
@@ -79,6 +82,17 @@ export default async function DriveSyncPage() {
               files={heldFiles.filter(f => f.content_type === 'announcements')}
             />
           </>
+        )}
+
+        {/* Blog needs migration 069; until then only this card says so. */}
+        {blogPreviews.error || blogPosts.error ? (
+          <ErrorBanner title="Couldn’t load the blog previews" message={(blogPreviews.error ?? blogPosts.error)!.message} />
+        ) : (
+          <DriveBlogCard
+            previews={(blogPreviews.data ?? []) as BlogPreview[]}
+            posts={(blogPosts.data ?? []) as LivePostRow[]}
+            files={heldFiles.filter(f => f.content_type === 'blog')}
+          />
         )}
 
         <DriveSourcesPanel

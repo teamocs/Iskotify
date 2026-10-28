@@ -302,3 +302,92 @@ describe('syncContentSources — run control', () => {
     expect(rows('drive_content_files')[0]).toMatchObject({ status: 'error' })
   })
 })
+
+const BLOG: ContentSource = { id: 'src-b', contentType: 'blog', folderId: 'blog-folder-0000', label: 'Blog' }
+const POST_MD = `---
+
+title: UPCAT Study Plan meta\\_title: Free UPCAT Study Plan meta\\_description: A week-by-week plan. slug: /blog/upcat-study-plan sources:
+
+---
+
+# UPCAT Study Plan
+
+Start with the diagnostic.
+
+## FAQ
+
+**Is it free?** Yes, the plan is free.
+
+---
+
+By Bryden Basil C. Elizan, Founder
+
+*Bryden is the founder of OCS.*
+`
+const blogEntry = (p: Partial<Parameters<typeof entry>[0]> = {}) =>
+  entry({ id: 'post-1', name: 'Iskotify — 01 Study Plan', mimeType: DOC, md5Checksum: null, modifiedTime: '2026-10-15T00:00:00Z', path: '', ...p })
+const livePost = (p: Record<string, unknown> = {}) => ({
+  id: 'bp-1', drive_file_id: 'post-1', slug: 'upcat-study-plan', status: 'published', title: 'UPCAT Study Plan',
+  meta_title: 'Free UPCAT Study Plan', meta_description: 'A week-by-week plan.', body_md: 'Start with the diagnostic.\n\n## FAQ\n\n**Is it free?** Yes, the plan is free.',
+  faq: [{ q: 'Is it free?', a: 'Yes, the plan is free.' }], author_name: 'Bryden Basil C. Elizan', author_bio: 'Bryden is the founder of OCS.', ...p,
+})
+
+describe('syncContentSources — blog', () => {
+  it('reads a blog Doc as markdown into a preview, never publishing it, with no AI call', async () => {
+    const { db, rows } = fakeDb()
+    const drive = routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD })
+    const ask = vi.fn(async () => null)
+    const s = await syncContentSources(db as never, drive, [BLOG], { ask })
+
+    expect(drive.downloadText).toHaveBeenCalledWith(expect.objectContaining({ id: 'post-1' }), expect.objectContaining({ format: 'markdown' }))
+    expect(s.files).toEqual([expect.objectContaining({ contentType: 'blog', status: 'previewed', message: expect.stringMatching(/New post · \/blog\/upcat-study-plan/) })])
+    const [batch] = rows('blog_import_batches')
+    expect(batch).toMatchObject({ status: 'preview', action: 'new', drive_file_id: 'post-1', flags: [] })
+    expect(batch!.post).toMatchObject({ slug: 'upcat-study-plan', title: 'UPCAT Study Plan', faq: [{ q: 'Is it free?', a: 'Yes, the plan is free.' }] })
+    expect(rows('blog_posts')).toHaveLength(0)
+    expect(ask).not.toHaveBeenCalled()
+    expect(s.aiCalls).toBe(0)
+  })
+
+  it('holds a Doc it cannot read, saying why', async () => {
+    const { db, rows } = fakeDb()
+    const s = await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': '# No front matter\n\ntext' }), [BLOG], {})
+    expect(s.files[0]).toMatchObject({ status: 'held', message: expect.stringMatching(/front matter/i) })
+    expect(rows('blog_import_batches')).toHaveLength(0)
+  })
+
+  it('records no_changes when the live post already matches the Doc', async () => {
+    const { db, rows } = fakeDb({ blog_posts: [livePost()] })
+    const s = await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})
+    expect(s.files[0]).toMatchObject({ status: 'no_changes' })
+    expect(rows('blog_import_batches')).toHaveLength(0)
+  })
+
+  it('treats FAQ objects as equal whatever key order the database returns', async () => {
+    const { db } = fakeDb({ blog_posts: [livePost({ faq: [{ a: 'Yes, the plan is free.', q: 'Is it free?' }] })] })
+    const s = await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})
+    expect(s.files[0]).toMatchObject({ status: 'no_changes' })
+  })
+
+  it('discards the old preview when the Doc is edited into something it cannot read', async () => {
+    const { db, rows } = fakeDb()
+    await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})
+    const broken = blogEntry({ modifiedTime: '2026-10-16T00:00:00Z' })
+    await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [broken] }, { 'post-1': 'no front matter' }), [BLOG], {})
+    expect(rows('blog_import_batches').map(b => b.status)).toEqual(['discarded'])
+  })
+
+  it('previews an edit of a live post as an update', async () => {
+    const { db, rows } = fakeDb({ blog_posts: [livePost({ title: 'Old title' })] })
+    const s = await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})
+    expect(s.files[0]).toMatchObject({ status: 'previewed', message: expect.stringMatching(/Updated post/) })
+    expect(rows('blog_import_batches')[0]).toMatchObject({ action: 'update' })
+  })
+
+  it('holds a Doc whose slug another post already uses', async () => {
+    const { db, rows } = fakeDb({ blog_posts: [livePost({ id: 'bp-9', drive_file_id: 'other-doc' })] })
+    const s = await syncContentSources(db as never, routedGateway({ [BLOG.folderId]: [blogEntry()] }, { 'post-1': POST_MD }), [BLOG], {})
+    expect(s.files[0]).toMatchObject({ status: 'held', message: expect.stringMatching(/already used/i) })
+    expect(rows('blog_import_batches')).toHaveLength(0)
+  })
+})

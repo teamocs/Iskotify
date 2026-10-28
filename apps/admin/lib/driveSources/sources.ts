@@ -5,13 +5,14 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const DRIVE_CONTENT_TYPES = ['questions', 'listings', 'announcements'] as const
+export const DRIVE_CONTENT_TYPES = ['questions', 'listings', 'announcements', 'blog'] as const
 export type DriveContentType = typeof DRIVE_CONTENT_TYPES[number]
 
 export const CONTENT_TYPE_LABEL: Record<DriveContentType, string> = {
   questions: 'Questions',
   listings: 'Listings (exams & scholarships)',
   announcements: 'Announcements',
+  blog: 'Blog posts',
 }
 
 export interface SyncSource {
