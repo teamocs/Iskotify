@@ -19,7 +19,7 @@
     "@supabase/ssr": "^0.12.7",
     "@upstash/redis": "1.39.0",
     "fflate": "^0.8.3",
-    "googleapis": "^144.0.0",
+    "googleapis": "^188.0.0",
     "nativewind": "^4.2.7",
     "next": "15.5.28",
     "papaparse": "5.7.0",
