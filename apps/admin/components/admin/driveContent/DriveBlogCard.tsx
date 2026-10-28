@@ -32,8 +32,6 @@ export interface LivePostRow {
   updated_at: string
 }
 
-export const BLOG_POST_COLUMNS = 'id, slug, title, status, first_published_at, updated_at'
-
 interface Props {
   previews: BlogPreview[]
   posts: LivePostRow[]
