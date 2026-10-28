@@ -2,22 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Platform } from 'react-native'
 import { router, useLocalSearchParams, Redirect, type Href } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
+import { CheckCircle1Outlined, Crown3Outlined, FileQuestionOutlined, Pencil1Outlined } from '@lineiconshq/free-icons'
 import { Screen } from '../components/ui/Screen'
-import { PageTitle } from '../components/ui/PageTitle'
 import { Button } from '../components/ui/Button'
 import { PressableScale } from '../components/ui/Pressable'
 import { Text } from '../components/ui/Text'
 import { DetailTopBar } from '../components/explore/DetailTopBar'
 import { decorative, focusRing, heading } from '../components/ui/a11y'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius, weight } from '../theme/tokens'
+import { spacing, radius, weight, layout, type Theme } from '../theme/tokens'
 import { usePremium } from '../hooks/usePremium'
 import { PURCHASE_CHANNEL, getFullAccessPrice, storeAvailable } from '../services/premium'
 import { buyFullAccess, restoreFullAccessForUser, confirmPurchase, pollPremium } from '../services/premiumState'
 import { supabase } from '../services/supabase'
 import { capture } from '../lib/analytics'
-import { FREE_DAILY_PRACTICE_QUESTIONS } from '../utils/premiumLimits'
+import { FREE_DAILY_PRACTICE_QUESTIONS, FREE_FULL_MOCKS_PER_EXAM } from '../utils/premiumLimits'
 
 // Iskotify Full Access (P3): one-time ₱500, no ads, no subscription.
 // Android buys through Google Play (RevenueCat); web buys through PayMongo
@@ -26,6 +25,12 @@ import { FREE_DAILY_PRACTICE_QUESTIONS } from '../utils/premiumLimits'
 // ("Confirming your purchase"). The Android build never mentions the web
 // purchase or its price (Play payments policy). A build that can't sell
 // (iOS for now, or no store key) shows no purchase at all.
+//
+// Layout (paywall research, 2026-10-28): one outcome headline, the two things
+// Full Access changes with the free limit beside each, then one card holding
+// the price, the single primary action, restore and the small print. No
+// urgency, no anchoring against invented prices, no new motion: state changes
+// are announced, not animated.
 
 type Phase =
   | 'idle'        // ready to buy
@@ -37,17 +42,79 @@ type Phase =
   | 'error'
   | 'not_found'   // restore found nothing
 
+type Icon = typeof CheckCircle1Outlined
+
 // Explanations (the main one and the per-option ones) are free for everyone,
 // so Full Access is exactly these two lines.
-const INCLUDED = [
-  'Unlimited practice questions, every day',
-  'Unlimited full mock exams',
-] as const
+const INCLUDED: { icon: Icon; title: string; free: string }[] = [
+  { icon: Pencil1Outlined, title: 'Unlimited practice questions, every day', free: `Free: ${FREE_DAILY_PRACTICE_QUESTIONS} a day` },
+  { icon: FileQuestionOutlined, title: 'Unlimited full mock exams', free: `Free: ${FREE_FULL_MOCKS_PER_EXAM} per exam` },
+]
 
 const STILL_FREE =
   `Still free for everyone: the diagnostic, flashcards, Study Sprint, notes, scholarships, the estimator, every explanation, one full mock per exam and ${FREE_DAILY_PRACTICE_QUESTIONS} practice questions a day.`
 
 const signInHref = (Platform.OS === 'web' ? '/auth/sign-in' : '/landing') as Href
+
+/** The maroon lead card: the page's one h1 and the outcome. White on maroon is 10.95:1. */
+function Hero({ t }: { t: Theme }) {
+  return (
+    <View
+      style={{
+        backgroundColor: t.accent, borderRadius: radius.sheet, borderCurve: 'continuous', overflow: 'hidden',
+        padding: spacing.xxl, paddingTop: spacing.xxxl, gap: spacing.lg, marginBottom: spacing.xxl,
+      }}
+    >
+      {/* Two soft discs for depth; static, decorative. */}
+      <View
+        {...decorative}
+        style={{ position: 'absolute', width: 220, height: 220, borderRadius: 110, right: -70, top: -90, backgroundColor: t.textInverse, opacity: 0.07 }}
+      />
+      <View
+        {...decorative}
+        style={{ position: 'absolute', width: 140, height: 140, borderRadius: 70, right: 40, bottom: -80, backgroundColor: t.textInverse, opacity: 0.05 }}
+      />
+      <View
+        {...decorative}
+        style={{
+          width: 48, height: 48, borderRadius: radius.button, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: t.scrimControl,
+        }}
+      >
+        <Lineicons icon={Crown3Outlined} size={26} color={t.textInverse} />
+      </View>
+      <View style={{ gap: spacing.sm }}>
+        <Text role="largeTitle" color={t.textInverse} {...heading(1)} maxFontSizeMultiplier={1.5}>
+          Iskotify Full Access
+        </Text>
+        <Text role="body" color={t.textInverse} style={{ opacity: 0.88 }} maxFontSizeMultiplier={2}>
+          Practise without limits. Pay once and keep it. No ads.
+        </Text>
+      </View>
+    </View>
+  )
+}
+
+/** One thing Full Access changes, with today's free limit beside it. */
+function Benefit({ t, icon, title, free }: { t: Theme; icon: Icon; title: string; free: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: layout.rowMinHeight }}>
+      <View
+        {...decorative}
+        style={{
+          width: 40, height: 40, borderRadius: radius.button, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: t.accentSurface,
+        }}
+      >
+        <Lineicons icon={icon} size={20} color={t.accentText} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text role="headline">{title}</Text>
+        <Text role="footnote" color={t.textSecondary}>{free}</Text>
+      </View>
+    </View>
+  )
+}
 
 export default function UpgradeScreen() {
   const { status: returnStatus, from } = useLocalSearchParams<{ status?: string; from?: string }>()
@@ -173,9 +240,14 @@ export default function UpgradeScreen() {
     ? (price ? `${price}, one-time payment` : canBuy ? 'One-time payment. Google Play shows the price.' : 'One-time payment.')
     : `${price ?? '₱500'}, one-time payment`
 
+  const card = {
+    backgroundColor: t.surface, borderRadius: radius.card, borderCurve: 'continuous' as const,
+    borderWidth: 1, borderColor: t.border, padding: spacing.xl,
+  }
+
   return (
     <Screen header={<DetailTopBar bare fallbackHref="/profile" />}>
-      <PageTitle title="Iskotify Full Access" lead="Pay once and keep it. No ads." />
+      <Hero t={t} />
 
       <View style={{ gap: spacing.xxl }}>
         {owned ? (
@@ -197,16 +269,11 @@ export default function UpgradeScreen() {
           </View>
         ) : null}
 
-        <View style={{ gap: spacing.md }}>
+        <View style={{ gap: spacing.lg }}>
           <Text role="title3" {...heading(2)} maxFontSizeMultiplier={1.6}>What you get</Text>
-          <View style={{ gap: spacing.sm }}>
-            {INCLUDED.map(line => (
-              <View key={line} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-                <View {...decorative} style={{ paddingTop: 2 }}>
-                  <Lineicons icon={CheckCircle1Outlined} size={18} color={t.accentText} />
-                </View>
-                <Text role="body" style={{ flex: 1 }}>{line}</Text>
-              </View>
+          <View style={[card, { gap: spacing.lg, paddingVertical: spacing.lg }]}>
+            {INCLUDED.map(item => (
+              <Benefit key={item.title} t={t} icon={item.icon} title={item.title} free={item.free} />
             ))}
           </View>
           <Text role="footnote" color={t.textSecondary}>{STILL_FREE}</Text>
@@ -224,9 +291,9 @@ export default function UpgradeScreen() {
         {owned ? (
           <Button label="Start practising" size="lg" fullWidth onPress={() => router.replace('/(tabs)/practice' as Href)} />
         ) : (
-          <View style={{ gap: spacing.md }}>
+          <View style={[card, { gap: spacing.lg, borderColor: t.accentBorder }]}>
             <View style={{ gap: spacing.xs }}>
-              <Text role="headline">{priceText}</Text>
+              <Text role="title2" maxFontSizeMultiplier={1.6}>{priceText}</Text>
               <Text role="footnote" color={t.textSecondary}>
                 Not a subscription. You pay once and Full Access stays on your account.
               </Text>
@@ -272,21 +339,23 @@ export default function UpgradeScreen() {
               />
             ) : null}
 
-            <Text role="footnote" color={t.textSecondary}>
-              Under 18? Ask your parent or guardian before you buy.
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.xs }}>
-              <Text role="footnote" color={t.textSecondary}>By buying you agree to the</Text>
-              <PressableScale
-                accessibilityRole="link"
-                accessibilityLabel="Terms of Service"
-                onPress={() => router.push('/terms')}
-                style={({ focused }) => [{ minHeight: 44, justifyContent: 'center' }, focusRing(t.focusRing, focused)]}
-              >
-                <Text role="footnote" color={t.accentText} style={[weight('600'), { textDecorationLine: 'underline' }]}>
-                  Terms of Service
-                </Text>
-              </PressableScale>
+            <View style={{ gap: spacing.xs, borderTopWidth: 1, borderTopColor: t.divider, paddingTop: spacing.md }}>
+              <Text role="footnote" color={t.textSecondary}>
+                Under 18? Ask your parent or guardian before you buy.
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.xs }}>
+                <Text role="footnote" color={t.textSecondary}>By buying you agree to the</Text>
+                <PressableScale
+                  accessibilityRole="link"
+                  accessibilityLabel="Terms of Service"
+                  onPress={() => router.push('/terms')}
+                  style={({ focused }) => [{ minHeight: 44, justifyContent: 'center' }, focusRing(t.focusRing, focused)]}
+                >
+                  <Text role="footnote" color={t.accentText} style={[weight('600'), { textDecorationLine: 'underline' }]}>
+                    Terms of Service
+                  </Text>
+                </PressableScale>
+              </View>
             </View>
           </View>
         )}
