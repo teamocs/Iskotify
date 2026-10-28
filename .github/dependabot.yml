@@ -36,6 +36,11 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: "@types/jest"
         update-types: [version-update:semver-major]
+      # @types/node tracks the Node runtime (22 in CI); TypeScript 7 is a planned migration.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+      - dependency-name: "typescript"
+        update-types: [version-update:semver-major]
       # Framework majors are planned upgrades, not automatic bumps.
       - dependency-name: "next"
         update-types: [version-update:semver-major]
