@@ -4,7 +4,8 @@ import path from 'path'
 import { parseBlogDoc } from '../parseDoc'
 
 // A trimmed copy of a real post, exactly as Drive exports a Google Doc to text/markdown.
-const doc = fs.readFileSync(path.join(__dirname, 'fixtures', 'post.md'), 'utf8')
+// LF-normalised: a Windows checkout turns the fixture CRLF, which the string edits below assume away.
+const doc = fs.readFileSync(path.join(__dirname, 'fixtures', 'post.md'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('parseBlogDoc', () => {
   const r = parseBlogDoc(doc)
