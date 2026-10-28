@@ -6,6 +6,15 @@ import path from 'path'
 const eas = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'eas.json'), 'utf8'))
 
 describe('EAS build profiles', () => {
+  // `eas build --profile development` stops (and offers a broken root install
+  // in this pnpm monorepo) when the app lacks expo-dev-client. Release builds
+  // leave the dev launcher out.
+  it('installs expo-dev-client for the development client profile', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
+    expect(eas.build.development.developmentClient).toBe(true)
+    expect(pkg.dependencies['expo-dev-client']).toBeDefined()
+  })
+
   it('builds production as an Android App Bundle', () => {
     expect(eas.build.production.android.buildType).toBe('app-bundle')
   })
