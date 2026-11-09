@@ -3,8 +3,8 @@
 // shape changes) without colliding with cached entries from the old schema.
 
 export const RedisKey = {
-  places: (lang: string, normalized: string) =>
-    `places:school:v1:${lang}:${normalized}`,
+  places: (lang: string, region: string, normalized: string) =>
+    `places:school:v2:${lang}:${region}:${normalized}`,
 
   rateGemini: () => `rate:gemini:global:v1`,
 

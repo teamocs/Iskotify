@@ -16,6 +16,14 @@ const MAX_QUERY_LEN = 80
 const RATE_MAX = 30
 const RATE_WINDOW_SEC = 60
 
+// Only values the app uses; anything else falls back to the first entry so a
+// caller can't mint unbounded cache keys (each miss is a billed Places call).
+const LANGS = ['en', 'fil'] as const
+const REGIONS = ['ph'] as const
+function pick<T extends string>(v: string | null, allowed: readonly T[]): T {
+  return allowed.find(a => a === v) ?? allowed[0]
+}
+
 function normalize(q: string): string {
   return q.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, MAX_QUERY_LEN)
 }
@@ -30,8 +38,8 @@ function clientIp(req: NextRequest): string {
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const rawQ = url.searchParams.get('q')
-  const lang = url.searchParams.get('lang') ?? 'en'
-  const region = url.searchParams.get('region') ?? 'ph'
+  const lang = pick(url.searchParams.get('lang'), LANGS)
+  const region = pick(url.searchParams.get('region'), REGIONS)
 
   if (rawQ === null) {
     return NextResponse.json({ error: 'q parameter required' }, { status: 400 })
@@ -42,7 +50,7 @@ export async function GET(req: NextRequest) {
   }
 
   const apiKey = process.env.GOOGLE_PLACES_SERVER_KEY
-  const key = RedisKey.places(lang, normalized)
+  const key = RedisKey.places(lang, region, normalized)
   const redis = getRedis()
 
   // 1. Try cache. Any Redis error falls through to the live call.
