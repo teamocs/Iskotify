@@ -76,8 +76,9 @@ async function doRefresh(db: DrizzleClient, gen: number): Promise<boolean> {
   const userId = await currentUserId()
   if (stale()) return snapshot.isPremium
   if (userId === undefined) {
-    // Session unknown: the cache can't be matched to an account, so it grants nothing new.
-    set({ isPremium: snapshot.loading ? false : snapshot.isPremium, loading: false })
+    // Session unknown: the cache can't be matched to an account, so it grants nothing, but a
+    // transient failure must not show a payer as free either. Stay as is (a first load stays
+    // `loading`, which the gates fail open on); the next foreground/auth refresh settles it.
     return snapshot.isPremium
   }
   if (userId === null) {
