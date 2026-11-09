@@ -700,6 +700,32 @@ describe('BlueprintExam', () => {
       }
     }, 15_000)
 
+    it('a late second load during a running attempt does not change the questions or the saved run', async () => {
+      let refresh!: () => void
+      const subSpy = jest.spyOn(require('../../../../services/queryCache'), 'subscribe')
+        .mockImplementation((...a: unknown[]) => { refresh = a[1] as () => void; return () => {} })
+      let resolveLate!: (bp: ExamBlueprint) => void
+      mockGetExamBlueprint
+        .mockResolvedValueOnce(BLUEPRINT)
+        .mockImplementationOnce(() => new Promise(r => { resolveLate = r }))
+      try {
+        render(<BlueprintExam />)
+        act(() => refresh()) // a catalog refresh before the first load finished
+        fireEvent.press(await screen.findByText('Full Mock'))
+        await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+        fireEvent.press(screen.getByText('4'))
+
+        mockGetQuestionsByCategory.mockResolvedValue(new Map([['quant', [Q3]]]))
+        await act(async () => { resolveLate(BLUEPRINT); await new Promise(r => setTimeout(r, 50)) })
+
+        expect(screen.getByText('2+2?')).toBeTruthy()
+        expect(screen.queryByText('5+5?')).toBeNull()
+        expect(mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0]).toMatchObject({ questionIds: ['Q2', 'Q1'] })
+      } finally {
+        subSpy.mockRestore()
+      }
+    })
+
     it('a second submit while the first is in flight is ignored', async () => {
       render(<BlueprintExam />)
       fireEvent.press(await screen.findByText('Full Mock'))

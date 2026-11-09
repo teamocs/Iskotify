@@ -360,14 +360,21 @@ export default function BlueprintExam() {
   const settle = useCallback((type: RunnerEvent['type']) => { send('LOAD'); send(type) }, [send])
 
   const loadExam = useCallback(async () => {
+    // Two loads can overlap (first load + a catalog refresh). One that lands after a
+    // run started (or finished) must not swap the sample under it: checked after each await.
+    const busy = () => isRunActive(runRef.current) || runRef.current.status === 'results'
     try {
       const bp = await getExamBlueprint(db, slug)
+      if (busy()) return
       if (!bp) { setQuestions([]); setBuilt(null); settle('UNAVAILABLE'); return }
       const cats = Array.from(new Set(bp.sections.map(s => s.skillCategory)))
       const [pools, passages, clusters] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db), getTargetCourseClusters(db)])
+      if (busy()) return
       poolsRef.current = pools; passagesRef.current = passages
       const poolIds = Array.from(pools.values()).flat().map(q => q.questionId)
-      seenRef.current = await lastSeenOrEmpty(db, 'upcat_questions', poolIds)
+      const seen = await lastSeenOrEmpty(db, 'upcat_questions', poolIds)
+      if (busy()) return
+      seenRef.current = seen
       const b = buildBlueprintExam(bp, pools, passages, undefined, { seen: seenRef.current })
       const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
       setExamMode('full')
@@ -381,7 +388,7 @@ export default function BlueprintExam() {
       console.warn('[exam/[slug]] load failed:', err)
       settle('LOAD_FAILED')
     }
-  }, [db, slug, settle])
+  }, [db, slug, settle, runRef])
 
   useEffect(() => { void loadExam() }, [loadExam])
 
@@ -687,18 +694,18 @@ export default function BlueprintExam() {
   }
   submitRef.current = submit  // keep the timer's auto-submit pointed at the latest closure
 
+  // A clock running out submits ONCE (total or last section), and "Submit what I
+  // answered" counts as that submit. If it fails, the clocks do not retry; the
+  // student retries from the review sheet.
+  const timerSubmittedRef = useRef(false)
   // "Submit what I answered" on an expired run: submit once the restored run is up.
   // Declared BEFORE the countdown effects so the run is already submitting when they run.
   useEffect(() => {
     if (!running || !submitStale) return
     setSubmitStale(false)
+    timerSubmittedRef.current = true
     void submitRef.current()
   }, [running, submitStale])
-
-  // A clock running out submits ONCE (total or last section). If that submit
-  // fails, the clocks do not retry every second; the student retries from the
-  // review sheet.
-  const timerSubmittedRef = useRef(false)
 
   // --- Total countdown tick: auto-submits at zero. ---
   useEffect(() => {
