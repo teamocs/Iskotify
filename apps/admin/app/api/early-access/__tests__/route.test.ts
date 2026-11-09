@@ -11,8 +11,11 @@ const mockMaybeSingle = vi.fn()
 const mockInsert = vi.fn()
 const mockUpdateEq = vi.fn()
 
+const mockLookupEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }))
+const mockLookupIlike = vi.fn(() => ({ maybeSingle: mockMaybeSingle }))
+
 const mockFrom = vi.fn(() => ({
-  select: () => ({ ilike: () => ({ maybeSingle: mockMaybeSingle }) }),
+  select: () => ({ eq: mockLookupEq, ilike: mockLookupIlike }),
   insert: mockInsert,
   update: () => ({ eq: mockUpdateEq }),
 }))
@@ -43,6 +46,8 @@ beforeEach(() => {
   mockInsert.mockReset()
   mockUpdateEq.mockReset()
   mockFrom.mockClear()
+  mockLookupEq.mockClear()
+  mockLookupIlike.mockClear()
   // Default: rate limiter allows (mirrors the fail-open real implementation)
   mockCheckRate.mockResolvedValue({ allowed: true, remaining: 5 })
 })
@@ -81,6 +86,15 @@ describe('POST /api/early-access', () => {
     expect(json.ok).toBe(true)
     expect(mockInsert).not.toHaveBeenCalled()
     expect(mockUpdateEq).toHaveBeenCalledOnce()
+  })
+
+  it('looks the email up by exact match, so a wildcard email cannot hit another row', async () => {
+    mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    mockInsert.mockResolvedValueOnce({ error: null })
+
+    await POST(makeRequest({ ...VALID_BODY, email: '%@Gmail.com' }))
+    expect(mockLookupEq).toHaveBeenCalledWith('email', '%@gmail.com')
+    expect(mockLookupIlike).not.toHaveBeenCalled()
   })
 
   it('returns 429 with the standard body when the per-IP rate limit is exceeded', async () => {

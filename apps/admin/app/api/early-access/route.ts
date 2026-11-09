@@ -75,14 +75,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Server not configured' }, { status: 500 })
   }
 
-  // The unique index is on lower(email) — an expression index, which PostgREST's
+  // Email is already lowercased and the index is on lower(email); match exactly
+  // (never ilike: user-supplied % and _ would act as wildcards). The index is an expression index, which PostgREST's
   // onConflict cannot target by name. So we look up an existing row first, then
   // update it (refresh the name/details) or insert a new one. A repeat email
   // therefore succeeds ("already registered") instead of 500-ing on the dupe.
   const { data: existing, error: lookupError } = await supabase
     .from('early_access_registrations')
     .select('id')
-    .ilike('email', email)
+    .eq('email', email)
     .maybeSingle()
 
   if (lookupError) {
