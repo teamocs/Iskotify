@@ -39,7 +39,7 @@ type Phase =
   | 'pending'     // still not recorded after ~30 s
   | 'success'
   | 'cancelled'   // web: back from PayMongo without paying
-  | 'error'
+  | { t: 'error'; message: string; retry: 'buy' | 'restore' } // what to show and what Try again repeats
   | 'not_found'   // restore found nothing
 
 type Icon = typeof CheckCircle1Outlined
@@ -126,8 +126,6 @@ export default function UpgradeScreen() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [price, setPrice] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>(returnStatus === 'cancelled' ? 'cancelled' : 'idle')
-  const [error, setError] = useState<string | null>(null)
-  const lastAction = useRef<'buy' | 'restore'>('buy')
   const viewed = useRef(false)
   // One purchase / restore at a time: a double tap lands before the button re-renders as busy.
   const inFlight = useRef(false)
@@ -160,7 +158,6 @@ export default function UpgradeScreen() {
   /** Wait for the server to record the purchase (it can lag the payment by a few seconds). */
   const confirm = useCallback(async (wait: () => Promise<boolean>) => {
     setPhase('confirming')
-    setError(null)
     const ok = await wait()
     if (life.current.signal.aborted) return // the screen closed: no state updates
     if (ok) {
@@ -187,9 +184,7 @@ export default function UpgradeScreen() {
   }
 
   const buy = () => once(async () => {
-    lastAction.current = 'buy'
     setPhase('working')
-    setError(null)
     capture('purchase_started', { channel: PURCHASE_CHANNEL, source: typeof from === 'string' && from ? from : 'direct' })
     const res = await buyFullAccess()
     if (gone()) return
@@ -199,20 +194,18 @@ export default function UpgradeScreen() {
       case 'already_premium': await confirm(() => pollPremium({ signal: signal() })); return
       case 'cancelled': setPhase('idle'); return
       case 'signed_out': setSignedIn(false); setPhase('idle'); return
-      case 'error': setError(res.message); setPhase('error'); return
+      case 'error': setPhase({ t: 'error', message: res.message, retry: 'buy' }); return
       default: setPhase('idle')
     }
   })
 
   const restore = () => once(async () => {
-    lastAction.current = 'restore'
     setPhase('working')
-    setError(null)
     const res = await restoreFullAccessForUser()
     if (gone()) return
     if (res.status === 'success') { await confirm(async () => (await confirmPurchase({ signal: signal() })) === 'confirmed'); return }
     if (res.status === 'signed_out') { setSignedIn(false); setPhase('idle'); return }
-    if (res.status === 'error') { setError(res.message); setPhase('error'); return }
+    if (res.status === 'error') { setPhase({ t: 'error', message: res.message, retry: 'restore' }); return }
     // Nothing in the store: the account may still hold Full Access on the server.
     setPhase('working')
     const found = await pollPremium({ signal: signal() })
@@ -224,6 +217,7 @@ export default function UpgradeScreen() {
 
   if (!enabled) return <Redirect href="/profile" />
 
+  const failed = typeof phase === 'object' ? phase : null
   const busy = phase === 'working' || phase === 'confirming'
   const owned = isPremium || phase === 'success'
 
@@ -284,8 +278,8 @@ export default function UpgradeScreen() {
             {statusMessage}
           </Text>
         ) : null}
-        {phase === 'error' && error ? (
-          <Text role="body" color={t.danger} accessibilityRole="alert">{error}</Text>
+        {failed?.message ? (
+          <Text role="body" color={t.danger} accessibilityRole="alert">{failed.message}</Text>
         ) : null}
 
         {owned ? (
@@ -310,13 +304,13 @@ export default function UpgradeScreen() {
               <Text role="body">Not available on this device yet.</Text>
             ) : phase === 'pending' ? (
               <Button label="Check again" size="lg" fullWidth onPress={() => void checkAgain()} />
-            ) : phase === 'error' ? (
+            ) : failed ? (
               <Button
                 label="Try again"
                 size="lg"
                 fullWidth
                 loading={busy}
-                onPress={() => void (lastAction.current === 'restore' ? restore() : buy())}
+                onPress={() => void (failed.retry === 'restore' ? restore() : buy())}
               />
             ) : (
               <Button

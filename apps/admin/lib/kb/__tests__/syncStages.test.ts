@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stageOf, splitStages, poolOf, draftReadiness, type StageFile } from '../syncStages'
+import { stageOf, splitStages, poolOf, draftReadiness, isBusy, type StageFile } from '../syncStages'
 
 const f = (p: Partial<StageFile>): StageFile => ({
   drive_file_id: 'f', name: 'UPCAT-Math.csv', status: 'imported', rows_imported: 10,
@@ -55,5 +55,15 @@ describe('draftReadiness', () => {
 
   it('never reports more held than drafted (a missing figure on an already-live question)', () => {
     expect(draftReadiness({ rows_drafted: 5, rows_missing_media: 9 })).toEqual({ ready: 0, heldMissingFigure: 5 })
+  })
+})
+
+describe('isBusy', () => {
+  const idle = { syncing: false, publishing: null, publishingAll: false }
+  it('is idle only when nothing runs', () => expect(isBusy(idle)).toBe(false))
+  it('blocks Publish while syncing, and Sync while publishing', () => {
+    expect(isBusy({ ...idle, syncing: true })).toBe(true)
+    expect(isBusy({ ...idle, publishing: 'f1' })).toBe(true)
+    expect(isBusy({ ...idle, publishingAll: true })).toBe(true)
   })
 })
