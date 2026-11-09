@@ -54,8 +54,7 @@ import {
   diagnosticRunKey, diagnosticRunSlug, examSlugLabel, firstParam, normalizeExamParam,
   type DiagnosticTarget,
 } from '../../../utils/diagnosticTarget'
-
-type Phase = 'loading' | 'load-error' | 'unavailable' | 'resume-prompt' | 'exam' | 'results'
+import { runnerReducer, isRunActive, RUNNER_INITIAL, type RunnerState, type RunnerEvent } from '../../../utils/runnerReducer'
 
 // Redesign M2: results are neutral — no tone-coloured percent or badges (a
 // green/red score reads as pass/fail, which PRODUCT.md rules out).
@@ -104,7 +103,22 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     if (guestMode === 'held') router.replace(GUEST_INTRO_HREF)
   }, [guestMode])
 
-  const [phase, setPhase] = useState<Phase>('loading')
+  // The run lifecycle (utils/runnerReducer.ts). runRef is the synchronous copy, so a
+  // second SUBMIT in the same tick (timer + tap) is refused before React re-renders.
+  const [run, setRun] = useState<RunnerState>(RUNNER_INITIAL)
+  const runRef = useRef(run)
+  /** Applies an event; false when it was not legal from the current state (a no-op). */
+  function send(type: RunnerEvent['type']): boolean {
+    const next = runnerReducer(runRef.current, { type })
+    if (next === runRef.current) return false
+    runRef.current = next
+    setRun(next)
+    return true
+  }
+  const running = run.status === 'running'
+  const submitting = run.status === 'submitting'
+  const runActive = isRunActive(run)
+  const leaving = running && run.sub === 'leaving'
   // Bumped by "Try again" after a failed question load to re-run the load effect.
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [questions, setQuestions] = useState<PreAssessQuestion[]>([])
@@ -118,13 +132,6 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   // The saved run's time already ran out: offer Submit / Discard instead of Resume.
   const [resumeStale, setResumeStale] = useState(false)
   const [submitStale, setSubmitStale] = useState(false)
-  // Fix 2: last-question review sheet (never submits directly).
-  const [reviewOpen, setReviewOpen] = useState(false)
-  // Fix 1: leave-confirmation + resume-in-progress-run state.
-  const [leaveConfirmed, setLeaveConfirmed] = useState(false)
-  // Review finding #2: disables exam inputs while submit() is in flight (see
-  // exam/[slug].tsx's submitting flag for the full rationale).
-  const [submitting, setSubmitting] = useState(false)
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
   const bankRowsRef = useRef<UpcatLocalRow[]>([])
   const subtestsRef = useRef<string[]>([])
@@ -160,7 +167,6 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   // timestamp so the clock stays accurate even if the interval drifts.
   const [endTime, setEndTime] = useState<number | null>(null)
   const [remaining, setRemaining] = useState(0)
-  const submittedRef = useRef(false)
   const submitRef = useRef<() => void>(() => {})
   const qPaneRef = useRef<ScrollView>(null)
 
@@ -169,25 +175,27 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   }, [idx])
 
   // Per-question timing (Task D) — see app/practice/exam/[slug].tsx for the
-  // same pattern: starts once questions load (phase becomes 'exam'), then
+  // same pattern: starts once questions load (the run starts), then
   // accumulates elapsed ms per index as idx changes.
   const timingRef = useRef<TimingState | null>(null)
   useEffect(() => {
-    if (phase === 'exam' && timingRef.current === null) {
+    if (runActive && timingRef.current === null) {
       timingRef.current = createTimingState(idx, Date.now())
     }
-  }, [phase, idx])
+  }, [runActive, idx])
   useEffect(() => {
     if (timingRef.current) {
       timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
     }
   }, [idx])
   useEffect(() => {
-    if (phase === 'exam') visitedRef.current.add(idx)
-  }, [phase, idx])
+    if (runActive) visitedRef.current.add(idx)
+  }, [runActive, idx])
 
   /** Builds a brand-new sample from the already-fetched bank rows and arms the timer. */
   function buildFreshExam() {
+    // A load that re-runs mid-run or on results must not swap the sample.
+    if (runnerReducer(runRef.current, { type: 'START' }) === runRef.current) return
     let built: PreAssessQuestion[]
     const tgt = targetRef.current
     if (tgt.kind === 'blueprint' && sourceRef.current) {
@@ -203,7 +211,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     setStartedAt(Date.now())
     visitedRef.current = new Set()
     if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
-    setPhase(built.length ? 'exam' : 'results')
+    send(built.length ? 'START' : 'UNAVAILABLE')
   }
 
   useEffect(() => {
@@ -253,7 +261,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
         setTarget(tgt)
         if (tgt.kind === 'unavailable') {
           setExamLabel(examSlugLabel(tgt.slug))
-          setPhase('unavailable')
+          send('UNAVAILABLE')
           return
         }
         if (tgt.kind === 'blueprint' && source) {
@@ -265,7 +273,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
           if (run && run.slug === diagnosticRunSlug(tgt, subjectParam) && run.questionIds.length > 0) {
             savedRunRef.current = run
             setResumeStale(isRunExpired(run, Date.now()))
-            setPhase('resume-prompt')
+            send('READY')
             return
           }
           buildFreshExam()
@@ -299,7 +307,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
         if (run && run.questionIds.length > 0) {
           savedRunRef.current = run
           setResumeStale(isRunExpired(run, Date.now()))
-          setPhase('resume-prompt')
+          send('READY')
           return
         }
 
@@ -309,7 +317,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
         // "no questions" page (and never hang on loading).
         if (!alive) return
         console.warn('[practice] question load failed:', err)
-        setPhase('load-error')
+        send('LOAD_FAILED')
       }
     })()
     return () => { alive = false }
@@ -361,7 +369,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     const reached = new Set<number>(Object.keys(remapIndexedById(run.questionIds, newIds, run.answers)).map(Number))
     for (let i = 0; i <= restoredIdx; i++) reached.add(i)
     visitedRef.current = reached
-    setPhase('exam')
+    send('START')
     return true
   }
 
@@ -379,10 +387,10 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   }
 
   // Fix 1: persist answers/position/timer on every change while in progress.
-  // Review finding #2: gated on submittedRef too — see exam/[slug].tsx's
-  // save effect comment for the full rationale.
+  // Review finding #2: only while running — never once submit has started (see
+  // exam/[slug].tsx's save effect comment for the full rationale).
   useEffect(() => {
-    if (phase !== 'exam' || questions.length === 0 || submittedRef.current || !target) return
+    if (!running || questions.length === 0 || !target) return
     void saveRun({
       runKey,
       kind: 'diagnostic',
@@ -398,32 +406,41 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
       sectionEndTime: null,
       startedAt,
     }).catch(err => console.warn('[practice/diagnostic] saveRun failed:', err))
-  }, [phase, runKey, target, subjectParam, questions, answers, idx, endTime, startedAt, saveRun])
+  }, [running, runKey, target, subjectParam, questions, answers, idx, endTime, startedAt, saveRun])
 
-  // Fix 1: leave-confirmation.
-  usePreventLeave(phase === 'exam' && !leaveConfirmed, () => {
+  // Fix 1: leave-confirmation while running. If the timer submitted while the dialog
+  // was open, CONFIRM_LEAVE is refused and nothing guards leaving any more: just go.
+  usePreventLeave(running && !leaving, () => {
     confirmAction(
       'Leave the exam?',
       'Your progress is saved.',
       'Leave',
-      () => setLeaveConfirmed(true),
+      () => { if (!send('CONFIRM_LEAVE')) router.back() },
       { cancelLabel: 'Stay', destructive: true },
     )
   })
   useEffect(() => {
-    if (leaveConfirmed) router.back()
-  }, [leaveConfirmed])
+    if (leaving) router.back()
+  }, [leaving])
   // Review finding #3: web-only tab-close warning + immediate persist flush.
-  useBeforeUnloadWarning(phase === 'exam')
+  useBeforeUnloadWarning(runActive)
 
   async function submit() {
-    if (submittedRef.current) return // guard against double-submit (timer + tap)
-    submittedRef.current = true
-    setSubmitting(true) // Review finding #2: disable exam inputs immediately
+    // Refused unless running: the double-submit guard (timer + tap), and inputs
+    // disable at once (Review finding #2).
+    if (!send('SUBMIT')) return
+    try {
+      await submitRun()
+      send('SUBMITTED')
+    } catch (err) {
+      // A throw before results must not strand the student behind a dead guard:
+      // back to answering, where they can submit again.
+      console.warn('[practice/diagnostic] submit failed:', err)
+      send('SUBMIT_FAILED')
+    }
+  }
 
-    // Fix 1: run finished — stop offering "Resume" for a completed attempt.
-    void clearRun(runKey).catch(err => console.warn('[practice/diagnostic] clearRun failed:', err))
-
+  async function submitRun() {
     // Scored over REACHED questions only (the same set as the attempt rows), so a
     // subject's session total is what the student saw and a subject never reached has
     // no row at all, not a 0% session.
@@ -453,8 +470,17 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     // Bundled fallback questions (ids like 'pre-math-1') are not upcat_questions
     // rows, so they are scored in the session below but never recorded as attempts.
     const bankRows = rows.filter(r => !isBundledDiagnosticId(r.questionId))
+    const sessionParams = bpSlug
+      ? buildBlueprintDiagnosticSessionParams(bpSlug, questions, answers, visitedRef.current, startedAt)
+      : buildDiagnosticSessionParams(reachedBySubject, startedAt)
+
+    // Fix 1: run finished — stop offering "Resume" for a completed attempt. Only
+    // once everything above (the part that can throw) worked: a failed submit
+    // keeps the saved run.
+    void clearRun(runKey).catch(err => console.warn('[practice/diagnostic] clearRun failed:', err))
+
     // Finding #2: telemetry is best-effort — it must never gate the results
-    // screen. submittedRef is already flipped above; if this insert rejects
+    // screen. The run is already 'submitting'; if this insert rejects
     // (disk full, storage quota, etc.) the student must still reach
     // results, not get stranded behind the double-submit guard.
     try {
@@ -463,57 +489,72 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
       console.warn('[practice/diagnostic] recordAttempts failed:', err)
     }
 
-    const sessionParams = bpSlug
-      ? buildBlueprintDiagnosticSessionParams(bpSlug, questions, answers, visitedRef.current, startedAt)
-      : buildDiagnosticSessionParams(reachedBySubject, startedAt)
     for (const params of sessionParams) {
       void recordSession(params).catch(err => console.warn('[practice/diagnostic] recordSession failed:', err))
     }
-    setPhase('results')
   }
   submitRef.current = submit // keep the timer's auto-submit pointed at the latest closure
 
-  // "Submit what I answered" on an expired run: submit once the restored exam phase is up.
-  // Declared BEFORE the countdown effect so submittedRef is already set when it runs.
+  // "Submit what I answered" on an expired run: submit once the restored run is up.
+  // Declared BEFORE the countdown effect so the run is already submitting when it runs.
   useEffect(() => {
-    if (phase !== 'exam' || !submitStale) return
+    if (!running || !submitStale) return
     setSubmitStale(false)
     void submitRef.current()
-  }, [phase, submitStale])
+  }, [running, submitStale])
 
   // Countdown tick — recomputed from the absolute endTime each second so it stays
-  // accurate; auto-submits when it reaches zero.
+  // accurate; auto-submits ONCE when it reaches zero. If that submit fails, the
+  // timer does not retry every second; the student retries from the review sheet.
+  const timerSubmittedRef = useRef(false)
   useEffect(() => {
-    if (phase !== 'exam' || endTime == null) return
+    if (!running || endTime == null) return
     const tick = () => {
-      if (submittedRef.current) return
+      if (runRef.current.status !== 'running') return
       const rem = Math.max(0, Math.round((endTime - Date.now()) / 1000))
       setRemaining(rem)
-      if (rem <= 0) submitRef.current()
+      if (rem <= 0 && !timerSubmittedRef.current) {
+        timerSubmittedRef.current = true
+        submitRef.current()
+      }
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [phase, endTime])
+  }, [running, endTime])
 
   // ── Redesign M3: render ────────────────────────────────────────────────────
   // Same frame as app/practice/exam/[slug].tsx: pages (<Screen>) around the
   // run, a focus-mode runner (RunnerFrame) during it. One maroon action per phase.
 
-  if (phase === 'loading') {
+  if (run.status === 'loading') {
     return <SessionLoading label="Loading diagnostic" fallbackHref={homeHref} />
   }
 
-  if (phase === 'load-error') {
+  if (run.status === 'error') {
     return (
       <SessionError
         fallbackHref={homeHref}
-        onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
+        onRetry={() => { send('LOAD'); setLoadAttempt(n => n + 1) }}
       />
     )
   }
 
-  if (phase === 'unavailable') {
+  // Nothing to run because the sample came out empty (the bank is still syncing).
+  if (run.status === 'unavailable' && target?.kind !== 'unavailable') {
+    return (
+      <SessionEmpty
+        title="No diagnostic questions yet"
+        body={guest
+          ? 'The question bank is still syncing. Check back soon.'
+          : 'The question bank is still syncing. Check back soon, or practise a subject in the meantime.'}
+        fallbackHref={homeHref}
+        actionLabel={guest ? 'Back to start' : 'Back to Home'}
+      />
+    )
+  }
+
+  if (run.status === 'unavailable') {
     const slug = target?.kind === 'unavailable' ? target.slug : ''
     return (
       <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
@@ -545,7 +586,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     )
   }
 
-  if (phase === 'resume-prompt') {
+  if (run.status === 'prestart') {
     const diagnosticName = isBlueprint ? `${examLabel} diagnostic` : 'diagnostic'
     return (
       <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
@@ -572,19 +613,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     )
   }
 
-  if (phase === 'results') {
-    if (questions.length === 0) {
-      return (
-        <SessionEmpty
-          title="No diagnostic questions yet"
-          body={guest
-            ? 'The question bank is still syncing. Check back soon.'
-            : 'The question bank is still syncing. Check back soon, or practise a subject in the meantime.'}
-          fallbackHref={homeHref}
-          actionLabel={guest ? 'Back to start' : 'Back to Home'}
-        />
-      )
-    }
+  if (run.status === 'results') {
     const score = scoreDiagnostic(questions, answers, visitedRef.current)
     const unreached = questions.length - score.overall.total
     const overallPct = score.overall.total ? Math.round((score.overall.correct / score.overall.total) * 100) : 0
@@ -730,10 +759,10 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
           answered={sel !== undefined}
           submitting={submitting}
           onBack={() => setIdx(i => Math.max(0, i - 1))}
-          onQuestions={expanded ? undefined : () => setReviewOpen(true)}
+          onQuestions={expanded ? undefined : () => send('OPEN_REVIEW')}
           onSkip={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
           onNext={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
-          onReview={() => setReviewOpen(true)}
+          onReview={() => send('OPEN_REVIEW')}
         />
       }
       navPanel={
@@ -741,13 +770,13 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
       }
     >
       <ExamReviewSheet
-        visible={reviewOpen}
+        visible={running && run.sub === 'reviewing'}
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
         onJump={jump}
-        onClose={() => setReviewOpen(false)}
-        onSubmit={() => { setReviewOpen(false); void submit() }}
+        onClose={() => send('CLOSE_REVIEW')}
+        onSubmit={() => { void submit() }}
       />
     </RunnerFrame>
   )

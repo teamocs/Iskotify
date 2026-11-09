@@ -602,6 +602,62 @@ describe('DiagnosticExam', () => {
     })
   })
 
+  // ── Runner reducer follow-up: a failed submit never loses the run ─────────
+  describe('failed submit', () => {
+    const scienceRun = (endTime: number) => ({
+      runKey: 'diagnostic:Science', kind: 'diagnostic', slug: 'Science', mode: '',
+      questionIds: ['S1'], sectionNames: ['Science'], answers: { 0: 0 }, idx: 0, sectionIdx: 0, floorIdx: 0,
+      endTime, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+    })
+
+    it('a timer submit that throws keeps the saved run, does not retry every second, and a tap retries', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const exam = require('../../../../utils/diagnosticExam')
+      const sessionSpy = jest.spyOn(exam, 'buildDiagnosticSessionParams')
+        .mockImplementationOnce(() => { throw new Error('boom') })
+      try {
+        mockSearchParams = { subject: 'Science' }
+        mockBankRows = [
+          { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+        ]
+        mockLoadRun.mockResolvedValue(scienceRun(Date.now() + 1200))
+        render(<DiagnosticExam />)
+        fireEvent.press(await screen.findByText('Resume where you left off'))
+        await waitFor(() => expect(warnSpy).toHaveBeenCalledWith('[practice/diagnostic] submit failed:', expect.any(Error)), { timeout: 5000 })
+
+        expect(mockClearRun).not.toHaveBeenCalled()
+        await act(async () => { await new Promise(r => setTimeout(r, 2500)) })
+        expect(sessionSpy).toHaveBeenCalledTimes(1) // no submit loop at 00:00
+        expect(mockClearRun).not.toHaveBeenCalled()
+        expect(screen.getByText('Sci Q1')).toBeTruthy()
+
+        await reviewAndConfirmSubmit(alertSpy)
+        await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+        expect(mockClearRun).toHaveBeenCalledWith('diagnostic:Science')
+      } finally {
+        sessionSpy.mockRestore()
+        warnSpy.mockRestore()
+      }
+    }, 15_000)
+
+    it('Leave in a dialog opened before the run was submitted still leaves', async () => {
+      mockSearchParams = { subject: 'Science' }
+      mockBankRows = [
+        { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+      ]
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+      const onAttemptLeave = mockUsePreventLeave.mock.calls[mockUsePreventLeave.mock.calls.length - 1]![1] as () => void
+      act(() => onAttemptLeave())
+      const leaveButtons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+
+      await reviewAndConfirmSubmit(alertSpy)
+      await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+      await act(async () => { leaveButtons.find(b => b.text === 'Leave')!.onPress!() })
+      expect(mockBack).toHaveBeenCalled()
+    })
+  })
+
   // ── Logic audit B5: a saved run whose time has run out ─────────────────────
   describe('B5: stale saved run', () => {
     const row = (id: string, subtest: string, text: string) =>
