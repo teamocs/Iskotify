@@ -57,8 +57,8 @@ import { fullMockAllowedNow } from '../../../services/premiumGate'
 import { usePremium } from '../../../hooks/usePremium'
 import { UpgradeCard, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
 import { lastSeenOrEmpty } from '../../../services/questionHistory'
-
-type Phase = 'loading' | 'prestart' | 'empty' | 'error' | 'exam' | 'results'
+import { isRunActive, type RunnerEvent } from '../../../utils/runnerReducer'
+import { useRunner } from '../../../hooks/useRunner'
 
 /** A flattened exam question that remembers which section it belongs to. */
 interface FlatQuestion { q: ExamQuestion; sectionName: string }
@@ -240,7 +240,13 @@ export default function BlueprintExam() {
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
-  const [phase, setPhase] = useState<Phase>('loading')
+  // The run lifecycle (hooks/useRunner.ts). 'unavailable' is this screen's
+  // "no blueprint / no questions yet" page.
+  const { run, runRef, send } = useRunner()
+  const running = run.status === 'running'
+  const submitting = run.status === 'submitting'
+  const runActive = isRunActive(run)
+  const leaving = running && run.sub === 'leaving'
   const [blueprint, setBlueprint] = useState<ExamBlueprint | null>(null)
   const [built, setBuilt] = useState<BuiltExam | null>(null)
   // 'full' (default, loaded at prestart) or 'sprint' once Study Sprint is started —
@@ -272,12 +278,9 @@ export default function BlueprintExam() {
   // Post-session Estimated Admission Score delta — UPCAT-only (the estimator
   // is UPCAT-specific); null for every other blueprint slug.
   const [scoreDelta, setScoreDelta] = useState<string | null>(null)
-  // Fix 2: last-question review sheet (never submits directly).
-  const [reviewOpen, setReviewOpen] = useState(false)
   // Fix 3: "Review mistakes" expands every review section at once.
   const [reviewMistakesTapped, setReviewMistakesTapped] = useState(false)
-  // Fix 1: leave-confirmation + resume-in-progress-run state.
-  const [leaveConfirmed, setLeaveConfirmed] = useState(false)
+  // Fix 1: resume-in-progress-run state.
   const [resumeAvailable, setResumeAvailable] = useState(false)
   // P3 Full Access: the free full mock for this exam is used up (never true with the paywall flag off).
   const [fullMockLocked, setFullMockLocked] = useState(false)
@@ -287,12 +290,6 @@ export default function BlueprintExam() {
   // Set by "Submit what I answered": the restored run is submitted once the exam phase is up.
   const [submitStale, setSubmitStale] = useState(false)
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
-  // Review finding #2: true from the first synchronous line of submit()
-  // until the screen leaves 'exam' phase — disables exam inputs so a tap
-  // during submit()'s awaits can't change answers/idx and re-trigger the
-  // persistence effect below (which also re-checks submittedRef itself, as
-  // a second line of defense against anything that isn't gated by this).
-  const [submitting, setSubmitting] = useState(false)
 
   // Countdown timer. endTime is an absolute timestamp so the clock stays accurate even
   // if the interval drifts. The total timer always runs; per-section timers run when
@@ -306,7 +303,6 @@ export default function BlueprintExam() {
   const [sectionRemaining, setSectionRemaining] = useState(0)
   // Lowest flat index the user is still allowed to navigate back to (raised as sections expire).
   const [floorIdx, setFloorIdx] = useState(0)
-  const submittedRef = useRef(false)
   // Latest section position/clock, so a confirm dialog opened earlier can tell the
   // section moved on (clock expiry) while it was open instead of acting on stale state.
   const sectionIdxRef = useRef(0)
@@ -328,18 +324,18 @@ export default function BlueprintExam() {
   // running total rather than overwriting it. Read at submit() via finalizeTiming.
   const timingRef = useRef<TimingState | null>(null)
   useEffect(() => {
-    if (phase === 'exam' && timingRef.current === null) {
+    if (runActive && timingRef.current === null) {
       timingRef.current = createTimingState(idx, Date.now())
     }
-  }, [phase, idx])
+  }, [runActive, idx])
   useEffect(() => {
     if (timingRef.current) {
       timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
     }
   }, [idx])
   useEffect(() => {
-    if (phase === 'exam') visitedRef.current.add(idx)
-  }, [phase, idx])
+    if (runActive) visitedRef.current.add(idx)
+  }, [runActive, idx])
 
   // Timer scaling (Task 4): when a thin question pool sampled fewer questions than
   // the blueprint declares, scale the total + per-section time budgets down by the
@@ -359,36 +355,47 @@ export default function BlueprintExam() {
 
   const examLoadedRef = useRef(false)
 
+  // A load settles from wherever it was started: the first load, Try again, or a
+  // catalog refresh while the empty/error page shows. LOAD is refused mid-run.
+  const settle = useCallback((type: RunnerEvent['type']) => { send('LOAD'); send(type) }, [send])
+
   const loadExam = useCallback(async () => {
+    // Two loads can overlap (first load + a catalog refresh). One that lands after a
+    // run started (or finished) must not swap the sample under it: checked after each await.
+    const busy = () => isRunActive(runRef.current) || runRef.current.status === 'results'
     try {
       const bp = await getExamBlueprint(db, slug)
-      if (!bp) { setQuestions([]); setBuilt(null); setPhase('empty'); return }
+      if (busy()) return
+      if (!bp) { setQuestions([]); setBuilt(null); settle('UNAVAILABLE'); return }
       const cats = Array.from(new Set(bp.sections.map(s => s.skillCategory)))
       const [pools, passages, clusters] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db), getTargetCourseClusters(db)])
+      if (busy()) return
       poolsRef.current = pools; passagesRef.current = passages
       const poolIds = Array.from(pools.values()).flat().map(q => q.questionId)
-      seenRef.current = await lastSeenOrEmpty(db, 'upcat_questions', poolIds)
+      const seen = await lastSeenOrEmpty(db, 'upcat_questions', poolIds)
+      if (busy()) return
+      seenRef.current = seen
       const b = buildBlueprintExam(bp, pools, passages, undefined, { seen: seenRef.current })
       const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
       setExamMode('full')
       setBlueprint(bp); setBuilt(b); setQuestions(flat); setCourseClusters(clusters)
       prefetchSessionImages(flat.map(f => f.q)) // fire-and-forget; never blocks session start
       if (flat.length) examLoadedRef.current = true
-      setPhase(flat.length ? 'prestart' : 'empty')
+      settle(flat.length ? 'READY' : 'UNAVAILABLE')
     } catch (err) {
       // Redesign M2: a load failure is its own retryable state, never shown as
       // "no questions yet" (DESIGN.md: a failed query is not an empty list).
       console.warn('[exam/[slug]] load failed:', err)
-      setPhase('error')
+      settle('LOAD_FAILED')
     }
-  }, [db, slug])
+  }, [db, slug, settle, runRef])
 
   useEffect(() => { void loadExam() }, [loadExam])
 
   // Fix 1: once the exam is loaded (prestart), check for a saved in-progress
   // run for this blueprint so the prestart screen can offer "Resume".
   useEffect(() => {
-    if (phase !== 'prestart' || !slug) return
+    if (run.status !== 'prestart' || !slug) return
     let cancelled = false
     void loadRun(runKeyFor('exam', slug)).then(run => {
       if (cancelled) return
@@ -399,29 +406,27 @@ export default function BlueprintExam() {
       }
     })
     return () => { cancelled = true }
-  }, [phase, slug, loadRun])
+  }, [run.status, slug, loadRun])
 
   // P3 Full Access: a free student gets one full mock per exam. Study Sprint and
   // resuming a started run are never gated. Re-checked whenever the premium
   // state changes: Full Access arriving unlocks it, and the fail-open answer
   // given while that state was still loading is replaced once it has loaded.
   useEffect(() => {
-    if (phase !== 'prestart' || !slug) return
+    if (run.status !== 'prestart' || !slug) return
     let cancelled = false
     void fullMockAllowedNow(db, slug).then(ok => { if (!cancelled) setFullMockLocked(!ok) })
     return () => { cancelled = true }
-  }, [phase, slug, db, premiumUnlimited, premiumLoading])
+  }, [run.status, slug, db, premiumUnlimited, premiumLoading])
 
   // Fix 1: persist answers/position/timers on every change while the run is
-  // in progress — cleared on submit (see submit()). Best-effort: a save
+  // in progress — cleared on submit (see submitRun()). Best-effort: a save
   // failure must never interrupt the exam.
-  // Review finding #2: also gated on submittedRef — submit() stays in phase
-  // 'exam' through its awaits, so without this check a state change during
-  // that window (blocked at the input layer by `submitting`, but checked
-  // here too as a second line of defense) would re-insert the row right
-  // after clearRun() fired, resurrecting a finished run as in-progress.
+  // Review finding #2: only while running — never once submit has started, so a
+  // state change during submit's awaits cannot re-insert the row right after
+  // clearRun() fired, resurrecting a finished run as in-progress.
   useEffect(() => {
-    if (phase !== 'exam' || !slug || questions.length === 0 || submittedRef.current) return
+    if (!running || !slug || questions.length === 0) return
     void saveRun({
       runKey: runKeyFor('exam', slug),
       kind: 'exam',
@@ -437,25 +442,27 @@ export default function BlueprintExam() {
       sectionEndTime,
       startedAt,
     }).catch(err => console.warn('[exam/[slug]] saveRun failed:', err))
-  }, [phase, slug, examMode, questions, answers, idx, sectionIdx, floorIdx, endTime, sectionEndTime, startedAt, saveRun])
+  }, [running, slug, examMode, questions, answers, idx, sectionIdx, floorIdx, endTime, sectionEndTime, startedAt, saveRun])
 
   // Fix 1: leave-confirmation — guards the back gesture, the Android hardware
   // back button, and the explicit ‹ button (all the same "remove this screen"
-  // action) behind a confirmation while a run is in progress.
-  usePreventLeave(phase === 'exam' && !leaveConfirmed, () => {
+  // action) behind a confirmation while a run is in progress. If the timer
+  // submitted while the dialog was open, CONFIRM_LEAVE is refused and nothing
+  // guards leaving any more: just go.
+  usePreventLeave(running && !leaving, () => {
     confirmAction(
       'Leave the exam?',
       'Your progress is saved.',
       'Leave',
-      () => setLeaveConfirmed(true),
+      () => { if (!send('CONFIRM_LEAVE')) router.back() },
       { cancelLabel: 'Stay', destructive: true },
     )
   })
   useEffect(() => {
-    if (leaveConfirmed) router.back()
-  }, [leaveConfirmed])
+    if (leaving) router.back()
+  }, [leaving])
   // Review finding #3: web-only tab-close warning + immediate persist flush.
-  useBeforeUnloadWarning(phase === 'exam')
+  useBeforeUnloadWarning(runActive)
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's question ids (re-fetching the current pool + passages, already
@@ -519,7 +526,7 @@ export default function BlueprintExam() {
     const reached = new Set<number>(Object.keys(remapIndexedById(run.questionIds, newIds, run.answers)).map(Number))
     for (let i = 0; i <= restoredIdx; i++) reached.add(i)
     visitedRef.current = reached
-    setPhase('exam')
+    send('START')
     return true
   }
 
@@ -570,7 +577,7 @@ export default function BlueprintExam() {
       prefetchSessionImages(flat.map(f => f.q)) // fire-and-forget; never blocks session start
       setIdx(0); setFloorIdx(0)
       setEndTime(now + STUDY_SPRINT_MINUTES * 60_000)
-      setPhase('exam')
+      send('START')
       return
     }
 
@@ -583,24 +590,25 @@ export default function BlueprintExam() {
       setFloorIdx(first.start)
       setSectionEndTime(now + first.timeMinutes * 60_000)
     }
-    setPhase('exam')
+    send('START')
   }
 
   async function submit() {
-    if (submittedRef.current) return  // guard against double-submit (timer + tap)
-    submittedRef.current = true
-    // Review finding #2: disable exam inputs immediately — closes the window
-    // where a tap during submit()'s awaits could change answers/idx and
-    // re-trigger the (now also submittedRef-gated) persistence effect.
-    setSubmitting(true)
+    // Refused unless running: the double-submit guard (timer + tap), and inputs
+    // disable at once (Review finding #2).
+    if (!send('SUBMIT')) return
+    try {
+      await submitRun()
+      send('SUBMITTED')
+    } catch (err) {
+      // A throw before results must not strand the student behind a dead guard:
+      // back to answering, where they can submit again.
+      console.warn('[exam/[slug]] submit failed:', err)
+      send('SUBMIT_FAILED')
+    }
+  }
 
-    // Fix 1: the run is finished — clear the saved in-progress state so the
-    // prestart screen stops offering "Resume" for a completed attempt.
-    // Best-effort: must never block reaching results. Runs after submittedRef
-    // is already true, so the save effect above will no-op even if something
-    // still manages to change state before results render.
-    if (slug) void clearRun(runKeyFor('exam', slug)).catch(err => console.warn('[exam/[slug]] clearRun failed:', err))
-
+  async function submitRun() {
     // Post-session delta — UPCAT only. Snapshot before this session's
     // attempts are written; best-effort, must never block reaching results.
     const isUpcat = slug === 'upcat'
@@ -637,8 +645,15 @@ export default function BlueprintExam() {
         elapsedByIdx,
         reached: visitedRef.current,
       })
+
+      // Fix 1: the run is finished — clear the saved in-progress state so the
+      // prestart screen stops offering "Resume" for a completed attempt. Only
+      // once everything above (the part that can throw) worked: a failed submit
+      // keeps the saved run. (blueprint is always set while a run is up.)
+      if (slug) void clearRun(runKeyFor('exam', slug)).catch(err => console.warn('[exam/[slug]] clearRun failed:', err))
+
       // Finding #2: telemetry is best-effort — it must never gate the results
-      // screen. submittedRef is already flipped above; if this insert rejects
+      // screen. The run is already 'submitting'; if this insert rejects
       // (disk full, storage quota, etc.) the student must still reach
       // results, not get stranded behind the double-submit guard.
       try {
@@ -676,45 +691,57 @@ export default function BlueprintExam() {
         console.warn('[exam/[slug]] post-session estimate snapshot failed:', err)
       }
     }
-
-    setPhase('results')
   }
   submitRef.current = submit  // keep the timer's auto-submit pointed at the latest closure
 
-  // "Submit what I answered" on an expired run: submit once the restored exam phase is up.
-  // Declared BEFORE the countdown effects so submittedRef is already set when they run.
+  // A clock running out submits ONCE (total or last section), and "Submit what I
+  // answered" counts as that submit. If it fails, the clocks do not retry; the
+  // student retries from the review sheet.
+  const timerSubmittedRef = useRef(false)
+  // "Submit what I answered" on an expired run: submit once the restored run is up.
+  // Declared BEFORE the countdown effects so the run is already submitting when they run.
   useEffect(() => {
-    if (phase !== 'exam' || !submitStale) return
+    if (!running || !submitStale) return
     setSubmitStale(false)
+    timerSubmittedRef.current = true
     void submitRef.current()
-  }, [phase, submitStale])
+  }, [running, submitStale])
 
   // --- Total countdown tick: auto-submits at zero. ---
   useEffect(() => {
-    if (phase !== 'exam' || endTime == null) return
+    if (!running || endTime == null) return
     const tick = () => {
-      if (submittedRef.current) return
+      if (runRef.current.status !== 'running') return
       const rem = Math.max(0, Math.round((endTime - Date.now()) / 1000))
       setRemaining(rem)
-      if (rem <= 0) submitRef.current()
+      if (rem <= 0 && !timerSubmittedRef.current) {
+        timerSubmittedRef.current = true
+        submitRef.current()
+      }
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [phase, endTime])
+  }, [running, endTime, runRef])
 
   // --- Per-section countdown tick (section-blocked exams only). On expiry, lock the
   //     current section and advance into the next; expiry of the last section submits. ---
   useEffect(() => {
-    if (phase !== 'exam' || !sectionBlocked || sectionEndTime == null) return
+    if (!running || !sectionBlocked || sectionEndTime == null) return
     const tick = () => {
-      if (submittedRef.current) return
+      if (runRef.current.status !== 'running') return
       const now = Date.now()
       setSectionRemaining(Math.max(0, Math.round((sectionEndTime - now) / 1000)))
       // Chain from the previous end and fast-forward through every section that already
       // expired (e.g. the app was closed): see utils/sectionClock.ts.
       const state = advanceSectionClocks({ sectionIdx, sectionEndTime, now, minutes: bounds.map(b => b.timeMinutes) })
-      if (state.finished) { submitRef.current(); return }
+      if (state.finished) {
+        if (!timerSubmittedRef.current) {
+          timerSubmittedRef.current = true
+          submitRef.current()
+        }
+        return
+      }
       if (state.sectionIdx !== sectionIdx) {
         const nb = bounds[state.sectionIdx]!
         setSectionIdx(state.sectionIdx)
@@ -727,7 +754,7 @@ export default function BlueprintExam() {
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [phase, sectionBlocked, sectionEndTime, sectionIdx, bounds])
+  }, [running, sectionBlocked, sectionEndTime, sectionIdx, bounds, runRef])
 
   // ── Redesign M2: render ───────────────────────────────────────────────────
   // Every phase keeps one primary (maroon) action. The exam phase is a focus
@@ -735,7 +762,7 @@ export default function BlueprintExam() {
   // a fixed options zone, a fixed footer, and — on expanded widths only — the
   // question navigator as a side panel.
 
-  if (phase === 'loading') {
+  if (run.status === 'loading') {
     return (
       <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
         <View accessible accessibilityLabel="Loading mock exam" aria-busy style={{ gap: spacing.md, paddingTop: spacing.md }}>
@@ -752,19 +779,19 @@ export default function BlueprintExam() {
     )
   }
 
-  if (phase === 'error') {
+  if (run.status === 'error') {
     return (
       <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
         <ErrorState
           title="Couldn't load this mock exam"
           body="Check your connection, then try again. Any exam you started is still saved."
-          onRetry={() => { setPhase('loading'); void loadExam() }}
+          onRetry={() => { send('LOAD'); void loadExam() }}
         />
       </Screen>
     )
   }
 
-  if (phase === 'empty') {
+  if (run.status === 'unavailable') {
     return (
       <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
         <EmptyState
@@ -777,7 +804,7 @@ export default function BlueprintExam() {
     )
   }
 
-  if (phase === 'prestart' && blueprint && built) {
+  if (run.status === 'prestart' && blueprint && built) {
     const declared = minutesLabel(blueprint.totalTimeMinutes)
     const scaledMinutes = timing?.totalMinutes ?? blueprint.totalTimeMinutes
     const scaled = minutesLabel(scaledMinutes)
@@ -905,7 +932,7 @@ export default function BlueprintExam() {
     )
   }
 
-  if (phase === 'results' && blueprint) {
+  if (run.status === 'results' && blueprint) {
     const correct = questions.reduce((n, fq, i) => n + (answers[i] === fq.q.correctIndex ? 1 : 0), 0)
     const wrong = questions.reduce((n, fq, i) => n + (answers[i] !== undefined && answers[i] !== fq.q.correctIndex ? 1 : 0), 0)
     // Only the questions the student reached count, the same set the saved sessions use.
@@ -1049,7 +1076,7 @@ export default function BlueprintExam() {
       () => {
         // The dialog can sit open while the section clock runs out and the tick moves the
         // student on (or the exam auto-submits). Act only if nothing moved meanwhile.
-        if (submittedRef.current || sectionIdxRef.current !== sectionIdx) return
+        if (runRef.current.status !== 'running' || sectionIdxRef.current !== sectionIdx) return
         const now = Date.now()
         const clock = nb.timeMinutes * 60_000
         // Finishing early starts the next clock now, but never later than the chain
@@ -1115,8 +1142,8 @@ export default function BlueprintExam() {
           submitting={submitting}
           onBack={() => setIdx(i => Math.max(floorIdx, i - 1))}
           onNext={stepForward}
-          onReview={() => setReviewOpen(true)}
-          onQuestions={expanded ? undefined : () => setReviewOpen(true)}
+          onReview={() => send('OPEN_REVIEW')}
+          onQuestions={expanded ? undefined : () => send('OPEN_REVIEW')}
           lastInSection={lastInSection}
           onFinishSection={finishSection}
         />
@@ -1137,7 +1164,7 @@ export default function BlueprintExam() {
     >
 
       <ExamReviewSheet
-        visible={reviewOpen}
+        visible={running && run.sub === 'reviewing'}
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
@@ -1147,8 +1174,8 @@ export default function BlueprintExam() {
         sections={sectionChips}
         onJumpSection={jumpSection}
         onJump={jump}
-        onClose={() => setReviewOpen(false)}
-        onSubmit={() => { setReviewOpen(false); void submit() }}
+        onClose={() => send('CLOSE_REVIEW')}
+        onSubmit={() => { void submit() }}
       />
 
       <ReportQuestionModal

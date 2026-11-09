@@ -731,5 +731,56 @@ describe('UpcatExam', () => {
       await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     })
   })
+
+  // ── Runner reducer follow-up: a failed submit never loses the run ─────────
+  describe('failed / double submit', () => {
+    const Q1 = { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null }
+
+    it('a timer submit that throws keeps the saved run, does not retry every second, and a tap retries', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const rowsSpy = jest.spyOn(require('../../../../utils/attemptRows'), 'buildAttemptRows')
+        .mockImplementationOnce(() => { throw new Error('boom') })
+      try {
+        mockSearchParams = { subtest: 'Mathematics' }
+        mockQuestionRows = [Q1]
+        mockLoadRun.mockResolvedValue({
+          runKey: 'upcat:Mathematics:full', kind: 'upcat', slug: 'Mathematics', mode: 'full',
+          questionIds: ['Q1'], sectionNames: ['Mathematics'], answers: { 0: 1 }, idx: 0, sectionIdx: 0, floorIdx: 0,
+          endTime: Date.now() + 1200, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+        })
+        render(<UpcatExam />)
+        fireEvent.press(await screen.findByText('Resume where you left off'))
+        await waitFor(() => expect(warnSpy).toHaveBeenCalledWith('[practice/upcat/[subtest]] submit failed:', expect.any(Error)), { timeout: 5000 })
+
+        expect(mockClearRun).not.toHaveBeenCalled()
+        await act(async () => { await new Promise(r => setTimeout(r, 2500)) })
+        expect(rowsSpy).toHaveBeenCalledTimes(1) // no submit loop at 00:00
+        expect(mockClearRun).not.toHaveBeenCalled()
+        expect(screen.getByText('1+1?')).toBeTruthy()
+
+        await reviewAndConfirmSubmit(alertSpy)
+        await waitFor(() => expect(screen.getByText('Practice complete.')).toBeTruthy())
+        expect(mockClearRun).toHaveBeenCalledWith('upcat:Mathematics:full')
+      } finally {
+        rowsSpy.mockRestore()
+        warnSpy.mockRestore()
+      }
+    }, 15_000)
+
+    it('a second submit while the first is in flight is ignored', async () => {
+      mockSearchParams = { subtest: 'Mathematics' }
+      mockQuestionRows = [Q1]
+      render(<UpcatExam />)
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('2'))
+      fireEvent.press(screen.getByText('Review'))
+      fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+      const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+      const confirm = buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!
+      await act(async () => { confirm(); confirm() })
+      await waitFor(() => expect(screen.getByText('Practice complete.')).toBeTruthy())
+      expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
+    })
+  })
 })
 

@@ -54,7 +54,8 @@ import {
   diagnosticRunKey, diagnosticRunSlug, examSlugLabel, firstParam, normalizeExamParam,
   type DiagnosticTarget,
 } from '../../../utils/diagnosticTarget'
-import { runnerReducer, isRunActive, RUNNER_INITIAL, type RunnerState, type RunnerEvent } from '../../../utils/runnerReducer'
+import { runnerReducer, isRunActive } from '../../../utils/runnerReducer'
+import { useRunner } from '../../../hooks/useRunner'
 
 // Redesign M2: results are neutral — no tone-coloured percent or badges (a
 // green/red score reads as pass/fail, which PRODUCT.md rules out).
@@ -103,18 +104,8 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     if (guestMode === 'held') router.replace(GUEST_INTRO_HREF)
   }, [guestMode])
 
-  // The run lifecycle (utils/runnerReducer.ts). runRef is the synchronous copy, so a
-  // second SUBMIT in the same tick (timer + tap) is refused before React re-renders.
-  const [run, setRun] = useState<RunnerState>(RUNNER_INITIAL)
-  const runRef = useRef(run)
-  /** Applies an event; false when it was not legal from the current state (a no-op). */
-  function send(type: RunnerEvent['type']): boolean {
-    const next = runnerReducer(runRef.current, { type })
-    if (next === runRef.current) return false
-    runRef.current = next
-    setRun(next)
-    return true
-  }
+  // The run lifecycle (hooks/useRunner.ts).
+  const { run, runRef, send } = useRunner()
   const running = run.status === 'running'
   const submitting = run.status === 'submitting'
   const runActive = isRunActive(run)
@@ -521,7 +512,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [running, endTime])
+  }, [running, endTime, runRef])
 
   // ── Redesign M3: render ────────────────────────────────────────────────────
   // Same frame as app/practice/exam/[slug].tsx: pages (<Screen>) around the
