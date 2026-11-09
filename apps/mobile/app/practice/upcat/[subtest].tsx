@@ -44,8 +44,8 @@ import { trimToAllowance } from '../../../utils/premiumLimits'
 import { UpgradeCard, PRACTICE_CAP_BODY, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
 import { lastSeenOrEmpty, getOpenMistakeIds, mistakesInScope } from '../../../services/questionHistory'
 import { buildMistakesExam } from '../../../utils/mistakes'
-
-type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results' | 'capped'
+import { runnerReducer, isRunActive } from '../../../utils/runnerReducer'
+import { useRunner } from '../../../hooks/useRunner'
 
 /** Route slug + session label of Mistakes mode (app/practice/mistakes.tsx). */
 const MISTAKES_SLUG = 'mistakes'
@@ -71,7 +71,13 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
-  const [phase, setPhase] = useState<Phase>('loading')
+  // The run lifecycle (hooks/useRunner.ts). 'prestart' is the resume prompt;
+  // 'unavailable' is a free-limit cap (`cap` says which) or an empty sample.
+  const { run, runRef, send } = useRunner()
+  const running = run.status === 'running'
+  const submitting = run.status === 'submitting'
+  const runActive = isRunActive(run)
+  const leaving = running && run.sub === 'leaving'
   // Bumped by "Try again" after a failed question load to re-run the load effect.
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
@@ -84,14 +90,8 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   // was already "ready" — four subtests unlocked — both before and after).
   const [scoreDelta, setScoreDelta] = useState<string | null>(null)
   const startRef = useState(() => Date.now())[0]
-  // Fix 2: last-question review sheet (never submits directly).
-  const [reviewOpen, setReviewOpen] = useState(false)
-  // Fix 1: leave-confirmation + resume-in-progress-run state.
-  const [leaveConfirmed, setLeaveConfirmed] = useState(false)
+  // Fix 1: resume-in-progress-run state.
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
-  // Review finding #2: disables exam inputs while submit() is in flight (see
-  // exam/[slug].tsx's submitting flag for the full rationale).
-  const [submitting, setSubmitting] = useState(false)
   const parsedRef = useRef<RawUpcatQuestion[]>([])
   // Mistakes mode: the open mistakes (newest first), read once per load, and
   // which served questions are mistakes (the rest are passage-set companions).
@@ -106,7 +106,6 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   const SECONDS_PER_QUESTION = 60
   const [endTime, setEndTime] = useState<number | null>(null)
   const [remaining, setRemaining] = useState(0)
-  const submittedRef = useRef(false)
   const submitRef = useRef<() => void>(() => {})
   // Question pane (middle scroll zone) — reset to top whenever the question changes
   // so scroll offset never carries over between questions.
@@ -123,14 +122,14 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   }, [idx])
 
   // Per-question timing (Task D) — see app/practice/exam/[slug].tsx for the
-  // same pattern: starts once questions load (phase becomes 'exam'), then
-  // accumulates elapsed ms per index as idx changes.
+  // same pattern: starts once the run starts, then accumulates elapsed ms per
+  // index as idx changes.
   const timingRef = useRef<TimingState | null>(null)
   useEffect(() => {
-    if (phase === 'exam' && timingRef.current === null) {
+    if (runActive && timingRef.current === null) {
       timingRef.current = createTimingState(idx, Date.now())
     }
-  }, [phase, idx])
+  }, [runActive, idx])
   useEffect(() => {
     if (timingRef.current) {
       timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
@@ -148,6 +147,10 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
 
   /** Builds a brand-new sample from the already-fetched pool and arms the timer. */
   async function buildFreshExam() {
+    // A load that re-runs mid-run or on results must not swap the sample (checked
+    // again after the awaits below, which a Resume tap can overtake).
+    const canStart = () => runnerReducer(runRef.current, { type: 'START' }) !== runRef.current
+    if (!canStart()) return
     let built: ExamQuestion[]
     if (isMistakes) {
       const m = buildMistakesExam(parsedRef.current, rawPassagesRef.current, openMistakesRef.current)
@@ -170,18 +173,25 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     // (Resume) is never gated: it already started.
     if (built.length > 0) {
       if (upcatDrillKind(subtestParam, mode) === 'mock') {
-        if (!(await fullMockAllowedNow(db, 'upcat'))) { setCap('mock'); setPhase('capped'); return }
+        if (!(await fullMockAllowedNow(db, 'upcat'))) {
+          if (canStart()) { setCap('mock'); send('UNAVAILABLE') }
+          return
+        }
       } else {
         const allowance = await practiceAllowanceNow(db)
-        if (allowance <= 0) { setCap('practice'); setPhase('capped'); return }
+        if (allowance <= 0) {
+          if (canStart()) { setCap('practice'); send('UNAVAILABLE') }
+          return
+        }
         // Whole passage sets only (see trimToAllowance for the exact rule).
         if (built.length > allowance) built = trimToAllowance(built, allowance)
       }
     }
+    if (!canStart()) return
     setQuestions(built)
     prefetchSessionImages(built) // fire-and-forget; never blocks session start
     if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
-    setPhase(built.length ? 'exam' : 'results')
+    send(built.length ? 'START' : 'UNAVAILABLE')
   }
 
   // P3 Full Access arrived (e.g. bought from the cap card): leave the cap and
@@ -189,9 +199,9 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   // state CHANGES (not on every phase change), so a gate that still says no can
   // never loop.
   useEffect(() => {
-    if (phase !== 'capped' || !premiumUnlimited) return
+    if (run.status !== 'unavailable' || !cap || !premiumUnlimited) return
     setCap(null)
-    setPhase('loading')
+    send('LOAD')
     void buildFreshExam()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [premiumUnlimited])
@@ -237,7 +247,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         const run = await loadRun(runKey)
         if (run && run.questionIds.length > 0) {
           savedRunRef.current = run
-          setPhase('resume-prompt')
+          send('READY')
           return
         }
 
@@ -246,7 +256,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         // A read failure is not an empty bank: offer a retry rather than the
         // "no questions" page (and never hang on loading).
         console.warn('[practice] question load failed:', err)
-        setPhase('load-error')
+        send('LOAD_FAILED')
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -275,7 +285,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
     setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
     setEndTime(run.endTime)
-    setPhase('exam')
+    send('START')
   }
 
   function startOver() {
@@ -285,10 +295,10 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   }
 
   // Fix 1: persist answers/position/timer on every change while in progress.
-  // Review finding #2: gated on submittedRef too — see exam/[slug].tsx's
-  // save effect comment for the full rationale.
+  // Review finding #2: only while running — never once submit has started (see
+  // exam/[slug].tsx's save effect comment for the full rationale).
   useEffect(() => {
-    if (phase !== 'exam' || questions.length === 0 || submittedRef.current) return
+    if (!running || questions.length === 0) return
     void saveRun({
       runKey,
       kind: 'upcat',
@@ -304,32 +314,41 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
       sectionEndTime: null,
       startedAt: startRef,
     }).catch(err => console.warn('[practice/upcat/[subtest]] saveRun failed:', err))
-  }, [phase, runKey, subtestParam, mode, questions, answers, idx, endTime, startRef, saveRun])
+  }, [running, runKey, subtestParam, mode, questions, answers, idx, endTime, startRef, saveRun])
 
-  // Fix 1: leave-confirmation.
-  usePreventLeave(phase === 'exam' && !leaveConfirmed, () => {
+  // Fix 1: leave-confirmation while running. If the timer submitted while the dialog
+  // was open, CONFIRM_LEAVE is refused and nothing guards leaving any more: just go.
+  usePreventLeave(running && !leaving, () => {
     confirmAction(
       'Leave the exam?',
       'Your progress is saved.',
       'Leave',
-      () => setLeaveConfirmed(true),
+      () => { if (!send('CONFIRM_LEAVE')) router.back() },
       { cancelLabel: 'Stay', destructive: true },
     )
   })
   useEffect(() => {
-    if (leaveConfirmed) router.back()
-  }, [leaveConfirmed])
+    if (leaving) router.back()
+  }, [leaving])
   // Review finding #3: web-only tab-close warning + immediate persist flush.
-  useBeforeUnloadWarning(phase === 'exam')
+  useBeforeUnloadWarning(runActive)
 
   async function submit() {
-    if (submittedRef.current) return  // guard against double-submit (timer + tap)
-    submittedRef.current = true
-    setSubmitting(true) // Review finding #2: disable exam inputs immediately
+    // Refused unless running: the double-submit guard (timer + tap), and inputs
+    // disable at once (Review finding #2).
+    if (!send('SUBMIT')) return
+    try {
+      await submitRun()
+      send('SUBMITTED')
+    } catch (err) {
+      // A throw before results must not strand the student behind a dead guard:
+      // back to answering, where they can submit again.
+      console.warn('[practice/upcat/[subtest]] submit failed:', err)
+      send('SUBMIT_FAILED')
+    }
+  }
 
-    // Fix 1: run finished — stop offering "Resume" for a completed attempt.
-    void clearRun(runKey).catch(err => console.warn('[practice/upcat/[subtest]] clearRun failed:', err))
-
+  async function submitRun() {
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const result = scoreExam(scored)
 
@@ -359,8 +378,14 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
       answers,
       elapsedByIdx,
     })
+
+    // Fix 1: run finished — stop offering "Resume" for a completed attempt. Only
+    // once everything above (the part that can throw) worked: a failed submit
+    // keeps the saved run.
+    void clearRun(runKey).catch(err => console.warn('[practice/upcat/[subtest]] clearRun failed:', err))
+
     // Finding #2: telemetry is best-effort — it must never gate the results
-    // screen. submittedRef is already flipped above; if this insert rejects
+    // screen. The run is already 'submitting'; if this insert rejects
     // (disk full, storage quota, etc.) the student must still reach
     // results, not get stranded behind the double-submit guard.
     try {
@@ -394,43 +419,47 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     } catch (err) {
       console.warn('[practice/upcat/[subtest]] post-session estimate snapshot failed:', err)
     }
-
-    setPhase('results')
   }
   submitRef.current = submit  // keep the timer's auto-submit pointed at the latest closure
 
   // Countdown tick — recomputed from the absolute endTime each second so it stays
-  // accurate; auto-submits when it reaches zero.
+  // accurate; auto-submits ONCE when it reaches zero. If that submit fails, the
+  // timer does not retry every second; the student retries from the review sheet.
+  const timerSubmittedRef = useRef(false)
   useEffect(() => {
-    if (phase !== 'exam' || endTime == null) return
+    if (!running || endTime == null) return
     const tick = () => {
+      if (runRef.current.status !== 'running') return
       const rem = Math.max(0, Math.round((endTime - Date.now()) / 1000))
       setRemaining(rem)
-      if (rem <= 0) submitRef.current()
+      if (rem <= 0 && !timerSubmittedRef.current) {
+        timerSubmittedRef.current = true
+        submitRef.current()
+      }
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [phase, endTime])
+  }, [running, endTime, runRef])
 
   // ── Redesign M3: render ────────────────────────────────────────────────────
   // Same frame as app/practice/exam/[slug].tsx: pages (<Screen>) around the
   // run, a focus-mode runner (RunnerFrame) during it. One maroon action per phase.
 
-  if (phase === 'loading') {
+  if (run.status === 'loading') {
     return <SessionLoading label={isMistakes ? 'Loading your mistakes' : 'Loading exam'} fallbackHref={homeHref} />
   }
 
-  if (phase === 'load-error') {
+  if (run.status === 'error') {
     return (
       <SessionError
         fallbackHref={homeHref}
-        onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
+        onRetry={() => { send('LOAD'); setLoadAttempt(n => n + 1) }}
       />
     )
   }
 
-  if (phase === 'capped') {
+  if (run.status === 'unavailable' && cap) {
     return (
       <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <View style={{ gap: spacing.md }}>
@@ -450,7 +479,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     )
   }
 
-  if (phase === 'resume-prompt') {
+  if (run.status === 'prestart') {
     return (
       <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <PageTitle
@@ -465,8 +494,9 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     )
   }
 
-  if (phase === 'results') {
-    if (questions.length === 0 && isMistakes && mistakesOutOfScope) {
+  // Nothing to run: the sample came out empty.
+  if (run.status === 'unavailable') {
+    if (isMistakes && mistakesOutOfScope) {
       return (
         <SessionEmpty
           title="Mistakes covers UPCAT practice."
@@ -476,7 +506,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         />
       )
     }
-    if (questions.length === 0 && isMistakes) {
+    if (isMistakes) {
       return (
         <SessionEmpty
           title="No mistakes to review."
@@ -486,16 +516,17 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         />
       )
     }
-    if (questions.length === 0) {
-      return (
-        <SessionEmpty
-          title="No questions for this subtest yet"
-          body="Its questions are still being written. Check back soon, or practise another subtest in the meantime."
-          fallbackHref="/practice/upcat"
-          actionLabel="Back to UPCAT practice"
-        />
-      )
-    }
+    return (
+      <SessionEmpty
+        title="No questions for this subtest yet"
+        body="Its questions are still being written. Check back soon, or practise another subtest in the meantime."
+        fallbackHref="/practice/upcat"
+        actionLabel="Back to UPCAT practice"
+      />
+    )
+  }
+
+  if (run.status === 'results') {
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const res = scoreExam(scored)
     const pct = res.overall.total ? Math.round((res.overall.correct / res.overall.total) * 100) : 0
@@ -622,10 +653,10 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
           answered={sel !== undefined}
           submitting={submitting}
           onBack={() => setIdx(i => Math.max(0, i - 1))}
-          onQuestions={expanded ? undefined : () => setReviewOpen(true)}
+          onQuestions={expanded ? undefined : () => send('OPEN_REVIEW')}
           onSkip={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
           onNext={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
-          onReview={() => setReviewOpen(true)}
+          onReview={() => send('OPEN_REVIEW')}
         />
       }
       navPanel={
@@ -639,14 +670,14 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
       }
     >
       <ExamReviewSheet
-        visible={reviewOpen}
+        visible={running && run.sub === 'reviewing'}
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
         flaggedIdxs={flaggedIdxs}
         onJump={jump}
-        onClose={() => setReviewOpen(false)}
-        onSubmit={() => { setReviewOpen(false); void submit() }}
+        onClose={() => send('CLOSE_REVIEW')}
+        onSubmit={() => { void submit() }}
       />
 
       <ReportQuestionModal

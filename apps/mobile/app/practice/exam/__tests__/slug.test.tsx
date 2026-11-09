@@ -667,4 +667,53 @@ describe('BlueprintExam', () => {
       expect(screen.queryByText(/used your free full mock/i)).toBeNull()
     })
   })
+
+  // ── Runner reducer follow-up: a failed submit never loses the run ─────────
+  describe('failed / double submit', () => {
+    it('a timer submit that throws keeps the saved run, does not retry every second, and a tap retries', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const rowsSpy = jest.spyOn(require('../../../../utils/attemptRows'), 'buildAttemptRows')
+        .mockImplementationOnce(() => { throw new Error('boom') })
+      try {
+        mockLoadRun.mockResolvedValue({
+          runKey: 'exam:test-mock', kind: 'exam', slug: 'test-mock', mode: 'full',
+          questionIds: ['Q2', 'Q1'], sectionNames: ['Math', 'Math'],
+          answers: { 0: 3 }, idx: 1, sectionIdx: 0, floorIdx: 0,
+          endTime: Date.now() + 1200, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+        })
+        render(<BlueprintExam />)
+        fireEvent.press(await screen.findByText('Resume where you left off'))
+        await waitFor(() => expect(warnSpy).toHaveBeenCalledWith('[exam/[slug]] submit failed:', expect.any(Error)), { timeout: 5000 })
+
+        expect(mockClearRun).not.toHaveBeenCalled()
+        await act(async () => { await new Promise(r => setTimeout(r, 2500)) })
+        expect(rowsSpy).toHaveBeenCalledTimes(1) // no submit loop at 00:00
+        expect(mockClearRun).not.toHaveBeenCalled()
+        expect(screen.getByText('1+1?')).toBeTruthy()
+
+        await reviewAndConfirmSubmit(alertSpy)
+        await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
+        expect(mockClearRun).toHaveBeenCalledWith('exam:test-mock')
+      } finally {
+        rowsSpy.mockRestore()
+        warnSpy.mockRestore()
+      }
+    }, 15_000)
+
+    it('a second submit while the first is in flight is ignored', async () => {
+      render(<BlueprintExam />)
+      fireEvent.press(await screen.findByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('Review'))
+      fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+      const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+      const confirm = buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!
+      await act(async () => { confirm(); confirm() })
+      await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
+      expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
+    })
+  })
 })
