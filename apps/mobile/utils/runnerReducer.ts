@@ -19,7 +19,7 @@ export type RunnerState =
 export type RunnerEvent = {
   type:
     | 'LOAD' | 'LOAD_FAILED' | 'UNAVAILABLE' | 'READY' | 'START'
-    | 'OPEN_REVIEW' | 'CLOSE_REVIEW' | 'CONFIRM_LEAVE' | 'CANCEL_LEAVE'
+    | 'OPEN_REVIEW' | 'CLOSE_REVIEW' | 'CONFIRM_LEAVE'
     | 'SUBMIT' | 'SUBMITTED' | 'SUBMIT_FAILED'
 }
 
@@ -38,7 +38,6 @@ export function runnerReducer(s: RunnerState, e: RunnerEvent): RunnerState {
     case 'OPEN_REVIEW': return sub === 'answering' ? { status: 'running', sub: 'reviewing' } : s
     case 'CLOSE_REVIEW': return sub === 'reviewing' ? answering() : s
     case 'CONFIRM_LEAVE': return sub === 'answering' || sub === 'reviewing' ? { status: 'running', sub: 'leaving' } : s
-    case 'CANCEL_LEAVE': return sub === 'leaving' ? answering() : s
     case 'SUBMIT': return sub ? { status: 'submitting' } : s
     case 'SUBMITTED': return s.status === 'submitting' ? { status: 'results' } : s
     case 'SUBMIT_FAILED': return s.status === 'submitting' ? answering() : s

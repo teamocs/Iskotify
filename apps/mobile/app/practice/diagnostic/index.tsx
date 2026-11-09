@@ -194,6 +194,8 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
 
   /** Builds a brand-new sample from the already-fetched bank rows and arms the timer. */
   function buildFreshExam() {
+    // A load that re-runs mid-run or on results must not swap the sample.
+    if (runnerReducer(runRef.current, { type: 'START' }) === runRef.current) return
     let built: PreAssessQuestion[]
     const tgt = targetRef.current
     if (tgt.kind === 'blueprint' && sourceRef.current) {
@@ -406,13 +408,14 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     }).catch(err => console.warn('[practice/diagnostic] saveRun failed:', err))
   }, [running, runKey, target, subjectParam, questions, answers, idx, endTime, startedAt, saveRun])
 
-  // Fix 1: leave-confirmation (also while a submit is in flight, as before).
-  usePreventLeave(runActive && !leaving, () => {
+  // Fix 1: leave-confirmation while running. If the timer submitted while the dialog
+  // was open, CONFIRM_LEAVE is refused and nothing guards leaving any more: just go.
+  usePreventLeave(running && !leaving, () => {
     confirmAction(
       'Leave the exam?',
       'Your progress is saved.',
       'Leave',
-      () => send('CONFIRM_LEAVE'),
+      () => { if (!send('CONFIRM_LEAVE')) router.back() },
       { cancelLabel: 'Stay', destructive: true },
     )
   })
@@ -438,9 +441,6 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   }
 
   async function submitRun() {
-    // Fix 1: run finished — stop offering "Resume" for a completed attempt.
-    void clearRun(runKey).catch(err => console.warn('[practice/diagnostic] clearRun failed:', err))
-
     // Scored over REACHED questions only (the same set as the attempt rows), so a
     // subject's session total is what the student saw and a subject never reached has
     // no row at all, not a 0% session.
@@ -470,6 +470,15 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     // Bundled fallback questions (ids like 'pre-math-1') are not upcat_questions
     // rows, so they are scored in the session below but never recorded as attempts.
     const bankRows = rows.filter(r => !isBundledDiagnosticId(r.questionId))
+    const sessionParams = bpSlug
+      ? buildBlueprintDiagnosticSessionParams(bpSlug, questions, answers, visitedRef.current, startedAt)
+      : buildDiagnosticSessionParams(reachedBySubject, startedAt)
+
+    // Fix 1: run finished — stop offering "Resume" for a completed attempt. Only
+    // once everything above (the part that can throw) worked: a failed submit
+    // keeps the saved run.
+    void clearRun(runKey).catch(err => console.warn('[practice/diagnostic] clearRun failed:', err))
+
     // Finding #2: telemetry is best-effort — it must never gate the results
     // screen. The run is already 'submitting'; if this insert rejects
     // (disk full, storage quota, etc.) the student must still reach
@@ -480,9 +489,6 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
       console.warn('[practice/diagnostic] recordAttempts failed:', err)
     }
 
-    const sessionParams = bpSlug
-      ? buildBlueprintDiagnosticSessionParams(bpSlug, questions, answers, visitedRef.current, startedAt)
-      : buildDiagnosticSessionParams(reachedBySubject, startedAt)
     for (const params of sessionParams) {
       void recordSession(params).catch(err => console.warn('[practice/diagnostic] recordSession failed:', err))
     }
@@ -498,14 +504,19 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   }, [running, submitStale])
 
   // Countdown tick — recomputed from the absolute endTime each second so it stays
-  // accurate; auto-submits when it reaches zero.
+  // accurate; auto-submits ONCE when it reaches zero. If that submit fails, the
+  // timer does not retry every second; the student retries from the review sheet.
+  const timerSubmittedRef = useRef(false)
   useEffect(() => {
     if (!running || endTime == null) return
     const tick = () => {
       if (runRef.current.status !== 'running') return
       const rem = Math.max(0, Math.round((endTime - Date.now()) / 1000))
       setRemaining(rem)
-      if (rem <= 0) submitRef.current()
+      if (rem <= 0 && !timerSubmittedRef.current) {
+        timerSubmittedRef.current = true
+        submitRef.current()
+      }
     }
     tick()
     const id = setInterval(tick, 1000)

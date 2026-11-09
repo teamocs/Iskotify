@@ -15,7 +15,7 @@ type Name = keyof typeof S
 
 const EVENTS: RunnerEvent['type'][] = [
   'LOAD', 'LOAD_FAILED', 'UNAVAILABLE', 'READY', 'START',
-  'OPEN_REVIEW', 'CLOSE_REVIEW', 'CONFIRM_LEAVE', 'CANCEL_LEAVE',
+  'OPEN_REVIEW', 'CLOSE_REVIEW', 'CONFIRM_LEAVE',
   'SUBMIT', 'SUBMITTED', 'SUBMIT_FAILED',
 ]
 
@@ -35,7 +35,6 @@ const LEGAL: [Name, RunnerEvent['type'], Name][] = [
   ['reviewing', 'CLOSE_REVIEW', 'answering'],
   ['answering', 'CONFIRM_LEAVE', 'leaving'],
   ['reviewing', 'CONFIRM_LEAVE', 'leaving'],
-  ['leaving', 'CANCEL_LEAVE', 'answering'],
   ['answering', 'SUBMIT', 'submitting'],
   ['reviewing', 'SUBMIT', 'submitting'],
   ['leaving', 'SUBMIT', 'submitting'],
@@ -68,11 +67,6 @@ describe('runnerReducer', () => {
     const failed = runnerReducer(runnerReducer(S.answering, { type: 'SUBMIT' }), { type: 'SUBMIT_FAILED' })
     expect(failed).toEqual(S.answering)
     expect(runnerReducer(failed, { type: 'SUBMIT' })).toEqual(S.submitting)
-  })
-
-  it('a cancelled leave goes back to answering (the leave guard is armed again)', () => {
-    const left = runnerReducer(S.answering, { type: 'CONFIRM_LEAVE' })
-    expect(runnerReducer(left, { type: 'CANCEL_LEAVE' })).toEqual(S.answering)
   })
 
   it('submitting from the review sheet closes it: results never carry an open review', () => {
