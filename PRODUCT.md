@@ -108,9 +108,11 @@ listings sync and CRUD, data-table browser, early-access tooling, analytics.
   before the first view. This is enforced by `apps/mobile/app/estimator/__tests__/compliance.test.tsx`.
 
 **Technical constraints:** offline-first (catalog read-only on the device, one synced `user_app_data` row
-per user); the mobile web build shares all screens; no push server (local notifications only); no
-monetization integrated (RevenueCat absent); account deletion is still missing and blocks the Play Store
-listing (audit P0).
+per user); the mobile web build shares all screens; no push server (local notifications only); the
+₱500 one-time Full Access purchase is integrated (RevenueCat on Android, behind
+`EXPO_PUBLIC_PAYWALL_ENABLED`; server entitlement row is the source of truth); in-app and web account
+deletion exist (`apps/mobile/services/deleteAccount.ts`, `/delete-account`). Remaining Play launch work is
+listed in `docs/launch/2026-10-production-readiness-plan.md`.
 
 **Undecided / open:**
 - Pricing after early access (free forever? freemium? parent-paid?). **(open — owner to decide)**
