@@ -12,6 +12,8 @@ import {
   markSyncDone,
   markFirstSyncDone,
   markSyncError,
+  clearSyncError,
+  BACKUP_FAILED_MESSAGE,
   resetSyncStatus,
 } from '../syncStatus'
 
@@ -193,6 +195,50 @@ describe('markSyncStart — clears lastError', () => {
     expect(after.isSyncing).toBe(true)
     expect(cb).toHaveBeenCalledTimes(1)
     unsub()
+  })
+})
+
+describe('overlapping runs', () => {
+  it('stays syncing until every started run is done', () => {
+    markSyncStart()
+    markSyncStart()
+    markSyncDone()
+    expect(getSyncStatus().isSyncing).toBe(true)
+    markSyncDone()
+    expect(getSyncStatus().isSyncing).toBe(false)
+  })
+
+  it('clamps at 0 on extra markSyncDone calls', () => {
+    markSyncDone()
+    markSyncDone()
+    markSyncStart()
+    expect(getSyncStatus().isSyncing).toBe(true)
+    markSyncDone()
+    expect(getSyncStatus().isSyncing).toBe(false)
+  })
+
+  it('resetSyncStatus resets the run counter', () => {
+    markSyncStart()
+    markSyncStart()
+    resetSyncStatus()
+    markSyncStart()
+    markSyncDone()
+    expect(getSyncStatus().isSyncing).toBe(false)
+  })
+})
+
+describe('markSyncStart — backup-failed banner', () => {
+  it('keeps BACKUP_FAILED_MESSAGE', () => {
+    markSyncError(BACKUP_FAILED_MESSAGE)
+    markSyncStart()
+    expect(getSyncStatus().lastError).toBe(BACKUP_FAILED_MESSAGE)
+  })
+
+  it('still clears it via clearSyncError', () => {
+    markSyncError(BACKUP_FAILED_MESSAGE)
+    markSyncStart()
+    clearSyncError(BACKUP_FAILED_MESSAGE)
+    expect(getSyncStatus().lastError).toBeNull()
   })
 })
 

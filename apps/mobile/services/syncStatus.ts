@@ -21,7 +21,7 @@ export interface SyncStatus {
 const INITIAL: SyncStatus = { isSyncing: false, firstSyncDone: false, lastError: null }
 
 // Mutable current values — mutated in-place only via setters below.
-let _isSyncing = false
+let _runs = 0 // overlapping syncs in flight; isSyncing is _runs > 0
 let _firstSyncDone = false
 let _lastError: string | null = null
 
@@ -44,14 +44,15 @@ function _notify(): void {
  * cached snapshot. Returns true if a new snapshot was created (state changed).
  */
 function _sync(): boolean {
+  const isSyncing = _runs > 0
   if (
-    _snapshot.isSyncing === _isSyncing &&
+    _snapshot.isSyncing === isSyncing &&
     _snapshot.firstSyncDone === _firstSyncDone &&
     _snapshot.lastError === _lastError
   ) {
     return false
   }
-  _snapshot = { isSyncing: _isSyncing, firstSyncDone: _firstSyncDone, lastError: _lastError }
+  _snapshot = { isSyncing, firstSyncDone: _firstSyncDone, lastError: _lastError }
   return true
 }
 
@@ -78,13 +79,14 @@ export function subscribeSyncStatus(cb: () => void): () => void {
 }
 
 /**
- * Signal that a sync has started. Also clears lastError — a new attempt
- * supersedes any previous failure.
- * No-op (and no notification) if isSyncing is already true and no error was pending.
+ * Signal that a sync has started. Overlapping runs are counted. Also clears
+ * lastError — a new attempt supersedes any previous failure — except the
+ * backup-failed banner, which only clearSyncError() removes.
+ * No-op (and no notification) if already syncing and no clearable error was pending.
  */
 export function markSyncStart(): void {
-  _isSyncing = true
-  _lastError = null
+  _runs++
+  if (_lastError !== BACKUP_FAILED_MESSAGE) _lastError = null
   if (_sync()) {
     _notify()
   }
@@ -92,11 +94,11 @@ export function markSyncStart(): void {
 
 /**
  * Signal that a sync has finished (success, early-exit, or error).
- * Sets isSyncing=false AND firstSyncDone=true.
+ * Ends one run (isSyncing=false once all overlapping runs are done) AND sets firstSyncDone=true.
  * Notifies listeners only if state actually changed.
  */
 export function markSyncDone(): void {
-  _isSyncing = false
+  _runs = Math.max(0, _runs - 1)
   _firstSyncDone = true
   if (_sync()) {
     _notify()
@@ -148,7 +150,7 @@ export function clearSyncError(message: string): void {
  * Always creates a new snapshot object so identity comparisons in tests work.
  */
 export function resetSyncStatus(): void {
-  _isSyncing = false
+  _runs = 0
   _firstSyncDone = false
   _lastError = null
   // Force a new object regardless of current snapshot identity.
