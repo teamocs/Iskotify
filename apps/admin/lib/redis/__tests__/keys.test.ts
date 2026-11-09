@@ -3,8 +3,8 @@ import { RedisKey } from '../keys'
 
 describe('RedisKey', () => {
   it('produces stable, versioned place keys', () => {
-    expect(RedisKey.places('en', 'ateneo')).toBe('places:school:v1:en:ateneo')
-    expect(RedisKey.places('fil', 'pamantasan')).toBe('places:school:v1:fil:pamantasan')
+    expect(RedisKey.places('en', 'ph', 'ateneo')).toBe('places:school:v2:en:ph:ateneo')
+    expect(RedisKey.places('fil', 'ph', 'pamantasan')).toBe('places:school:v2:fil:ph:pamantasan')
   })
 
   it('produces stable gemini rate-limit key', () => {

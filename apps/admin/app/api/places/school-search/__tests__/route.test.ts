@@ -97,6 +97,21 @@ describe('GET /api/places/school-search', () => {
     expect(body.suggestions[0].name).toBe('Fallback U')
   })
 
+  it('falls back to en/ph for lang and region outside the allowlist (no cache-key or upstream bypass)', async () => {
+    mockGet.mockResolvedValueOnce(null)
+    mockSearchSchools.mockResolvedValueOnce([])
+    await GET(makeReq('http://x/api/places/school-search?q=ateneo&lang=zz-random&region=US'))
+    expect(mockGet).toHaveBeenCalledWith('places:school:v2:en:ph:ateneo')
+    expect(mockSearchSchools).toHaveBeenCalledWith('ateneo', expect.objectContaining({ region: 'ph' }))
+  })
+
+  it('keeps an allowlisted lang in the cache key', async () => {
+    mockGet.mockResolvedValueOnce(null)
+    mockSearchSchools.mockResolvedValueOnce([])
+    await GET(makeReq('http://x/api/places/school-search?q=ateneo&lang=fil&region=ph'))
+    expect(mockGet).toHaveBeenCalledWith('places:school:v2:fil:ph:ateneo')
+  })
+
   it('returns 500 when GOOGLE_PLACES_SERVER_KEY is missing', async () => {
     delete process.env.GOOGLE_PLACES_SERVER_KEY
     mockGet.mockResolvedValueOnce(null)

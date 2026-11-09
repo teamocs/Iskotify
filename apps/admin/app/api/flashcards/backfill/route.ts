@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
+import { safeEqual } from '@/lib/payments/signature'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
 import { embedOne } from '@/lib/embedOne'
 
@@ -20,7 +21,7 @@ async function processBatch<T, R>(items: T[], fn: (item: T) => Promise<R>, concu
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-admin-secret')
-  if (!secret || secret !== process.env.ADMIN_BACKFILL_SECRET) {
+  if (!safeEqual(secret ?? '', process.env.ADMIN_BACKFILL_SECRET ?? '')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

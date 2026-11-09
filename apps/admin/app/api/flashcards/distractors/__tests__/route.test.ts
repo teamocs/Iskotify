@@ -53,6 +53,13 @@ describe('POST /api/flashcards/distractors', () => {
     expect(res.status).toBe(401)
   })
 
+  it('fails closed (401) when ADMIN_BACKFILL_SECRET is unset, even for an empty header', async () => {
+    vi.stubEnv('ADMIN_BACKFILL_SECRET', '')
+    const POST = await importRoute()
+    const res = await POST(makeReq({ cardId: 'c1' }, ''))
+    expect(res.status).toBe(401)
+  })
+
   it('returns 400 when cardId is missing', async () => {
     const POST = await importRoute()
     const res = await POST(makeReq({}))
