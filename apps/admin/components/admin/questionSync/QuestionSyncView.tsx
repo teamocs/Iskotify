@@ -8,7 +8,7 @@ import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { notifyError, notifySuccess } from '@/lib/toast'
-import { splitStages, poolOf, draftReadiness } from '@/lib/kb/syncStages'
+import { splitStages, poolOf, draftReadiness, isBusy } from '@/lib/kb/syncStages'
 import { describeContentSync } from '@/lib/driveContent/describe'
 import { PreviewDrawer } from './PreviewDrawer'
 import { MappingDialog } from './MappingDialog'
@@ -132,7 +132,7 @@ export function QuestionSyncView({ files, runs, events }: { files: KbFileRow[]; 
     router.refresh()
   }
 
-  const busy = publishing !== null || publishingAll
+  const busy = isBusy({ syncing, publishing, publishingAll })
 
   const previewColumns: Column<KbFileRow>[] = [
     { id: 'name', header: 'File', sortValue: f => f.name, searchValue: f => `${f.name} ${f.path}`, cell: f => <FileName f={f} /> },

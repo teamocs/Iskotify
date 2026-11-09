@@ -49,3 +49,7 @@ export function draftReadiness(f: { rows_drafted: number; rows_missing_media: nu
   const heldMissingFigure = Math.min(f.rows_missing_media, f.rows_drafted)
   return { ready: f.rows_drafted - heldMissingFigure, heldMissingFigure }
 }
+
+/** Sync and Publish both rewrite kb_drive_files, so only one may run at a time. */
+export const isBusy = (o: { syncing: boolean; publishing: string | null; publishingAll: boolean }): boolean =>
+  o.syncing || o.publishing !== null || o.publishingAll
