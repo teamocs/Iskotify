@@ -13,6 +13,7 @@ import {
   buyFullAccess, restoreFullAccessForUser, forgetPremiumState, _resetPremiumForTests,
 } from '../premiumState'
 import { readPremiumCache, writePremiumCache } from '../premiumCache'
+import { supabase } from '../supabase'
 
 const mockAuth: { userId: string | null; listener: ((event: string, session: unknown) => void) | null } = { userId: 'u1', listener: null }
 jest.mock('../supabase', () => ({
@@ -242,6 +243,48 @@ it('an account switch drops the previous access at once (no store logout racing 
   forgetPremiumState()
   expect(getPremiumSnapshot().isPremium).toBe(false)
   expect(mockStore.storeLogOut).not.toHaveBeenCalled()
+})
+
+describe('session unknown (getSession throws)', () => {
+  const failSession = () => (supabase.auth.getSession as jest.Mock).mockRejectedValueOnce(new Error('storage unavailable'))
+
+  it('a cached-premium student is not dropped to free on first load: it stays loading, then a later refresh settles it', async () => {
+    const db = makeDb()
+    await writePremiumCache(db, true, 'u1', 5)
+    failSession()
+    await initPremium(db)
+    expect(getPremiumSnapshot()).toMatchObject({ isPremium: false, loading: true, unlimited: false })
+    mockRow.mockResolvedValue(true)
+    await refreshPremium()
+    expect(getPremiumSnapshot()).toMatchObject({ isPremium: true, loading: false })
+  })
+
+  it('never grants from the cache when the account is unknown', async () => {
+    const db = makeDb()
+    await writePremiumCache(db, true, 'u1', 5)
+    failSession()
+    await initPremium(db)
+    expect(getPremiumSnapshot().isPremium).toBe(false)
+    expect(mockRow).not.toHaveBeenCalled()
+  })
+
+  it('signed out is still free (not left loading) and the cache is cleared', async () => {
+    const db = makeDb()
+    await writePremiumCache(db, true, 'u1', 5)
+    mockAuth.userId = null
+    await initPremium(db)
+    expect(getPremiumSnapshot()).toMatchObject({ isPremium: false, loading: false })
+    expect((await readPremiumCache(db)).premium).toBe(false)
+  })
+
+  it('keeps a known premium state when a later check cannot read the session', async () => {
+    const db = makeDb()
+    mockRow.mockResolvedValue(true)
+    await initPremium(db)
+    failSession()
+    await refreshPremium()
+    expect(getPremiumSnapshot()).toMatchObject({ isPremium: true, loading: false })
+  })
 })
 
 describe('account switch (the cache belongs to one account)', () => {
