@@ -21,7 +21,7 @@ const RATE_WINDOW_SEC = 60
 const LANGS = ['en', 'fil'] as const
 const REGIONS = ['ph'] as const
 function pick<T extends string>(v: string | null, allowed: readonly T[]): T {
-  return allowed.find(a => a === v) ?? allowed[0]
+  return allowed.find(a => a === v) ?? allowed[0]!
 }
 
 function normalize(q: string): string {
