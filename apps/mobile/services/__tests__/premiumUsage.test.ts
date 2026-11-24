@@ -8,7 +8,8 @@ import * as schema from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
 import type { DrizzleClient } from '../../db/client'
 import { readPremiumCache, writePremiumCache, clearPremiumCache } from '../premiumCache'
-import { countPracticeAnswersToday, countFullMocks } from '../premiumUsage'
+import { countPracticeAnswersToday, countFullMocks, countPracticeHeld, hasHeldFullMock } from '../premiumUsage'
+import { saveExamRun } from '../examRuns'
 
 function makeDb() {
   const raw = new Database(':memory:')
@@ -124,5 +125,59 @@ describe('countFullMocks', () => {
     expect(await countFullMocks(db, 'upcat')).toBe(2)
     expect(await countFullMocks(db, 'nmat')).toBe(1)
     expect(await countFullMocks(db, 'pmma')).toBe(0)
+  })
+})
+
+describe('saved runs hold part of the free limits', () => {
+  const save = async (db: DrizzleClient, runKey: string, over: object = {}, updatedAt = NOW - 60_000) => {
+    const [kind, slug, mode] = runKey.split(':')
+    jest.spyOn(Date, 'now').mockReturnValue(updatedAt)
+    await saveExamRun(db, {
+      runKey, kind: kind!, slug: slug!, mode: mode ?? 'full', questionIds: ['a', 'b', 'c', 'd'], sectionNames: [], answers: { 0: 1 },
+      idx: 0, sectionIdx: 0, floorIdx: 0, endTime: NOW + 60_000, sectionEndTime: null, startedAt: updatedAt, ...over,
+    })
+    jest.mocked(Date.now).mockRestore()
+  }
+
+  it('a live drill holds every question it was given, except the run being replaced', async () => {
+    const { db } = makeDb()
+    await save(db, 'upcat:Math:quick')
+    await save(db, 'upcat:Science:full')
+    await save(db, 'upcat:mistakes:quick')
+    expect(await countPracticeHeld(db, 'none', NOW)).toBe(12)
+    expect(await countPracticeHeld(db, 'upcat:Math:quick', NOW)).toBe(8)
+  })
+
+  it('an expired drill holds only its answers, and nothing from the next Manila day', async () => {
+    const { db } = makeDb()
+    await save(db, 'upcat:Math:quick', { endTime: NOW - 1 })
+    expect(await countPracticeHeld(db, '', NOW)).toBe(1)
+    await save(db, 'upcat:Math:quick', { endTime: MANILA_MIDNIGHT - 1 }, MANILA_MIDNIGHT - 60_000)
+    expect(await countPracticeHeld(db, '', NOW)).toBe(0)
+  })
+
+  it('full mocks, exams and the diagnostic hold no practice questions', async () => {
+    const { db } = makeDb()
+    for (const k of ['upcat:all:full', 'exam:upcat', 'diagnostic:upcat']) await save(db, k)
+    expect(await countPracticeHeld(db, '', NOW)).toBe(0)
+  })
+
+  it('a full mock in progress counts for its exam, under either route', async () => {
+    const { db } = makeDb()
+    await save(db, 'exam:upcat')
+    expect(await hasHeldFullMock(db, 'upcat', 'upcat:all:full', NOW)).toBe(true)
+    expect(await hasHeldFullMock(db, 'upcat', 'exam:upcat', NOW)).toBe(false)
+    expect(await hasHeldFullMock(db, 'ustet', '', NOW)).toBe(false)
+  })
+
+  it('the UPCAT runner full mock counts for upcat only; sprints, drills and expired mocks never do', async () => {
+    const { db } = makeDb()
+    await save(db, 'upcat:all:full')
+    expect(await hasHeldFullMock(db, 'upcat', 'exam:upcat', NOW)).toBe(true)
+    expect(await hasHeldFullMock(db, 'all', '', NOW)).toBe(false)
+    await save(db, 'upcat:all:full', { endTime: MANILA_MIDNIGHT - 1 }, MANILA_MIDNIGHT - 60_000)
+    await save(db, 'exam:upcat', { mode: 'sprint' })
+    await save(db, 'upcat:all:quick')
+    expect(await hasHeldFullMock(db, 'upcat', '', NOW)).toBe(false)
   })
 })

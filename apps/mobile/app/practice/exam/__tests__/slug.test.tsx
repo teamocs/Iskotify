@@ -629,8 +629,8 @@ describe('BlueprintExam', () => {
     it('after the free full mock, the prestart offers Full Access instead, and Study Sprint stays free', async () => {
       mockGate.fullMockAllowed = false
       render(<BlueprintExam />)
-      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
-      expect(mockFullMockAllowedNow).toHaveBeenCalledWith(expect.anything(), 'test-mock')
+      expect(await screen.findByText(/used or still in progress/i)).toBeTruthy()
+      expect(mockFullMockAllowedNow).toHaveBeenCalledWith(expect.anything(), 'test-mock', 'exam:test-mock')
       expect(screen.queryByRole('button', { name: 'Full Mock' })).toBeNull()
       expect(screen.getByRole('button', { name: /Study Sprint/ })).toBeTruthy()
       fireEvent.press(screen.getByRole('button', { name: 'Unlock Full Access' }))
@@ -641,12 +641,12 @@ describe('BlueprintExam', () => {
       Object.assign(mockPremium, { enabled: true, unlimited: false })
       mockGate.fullMockAllowed = false
       const { rerender } = render(<BlueprintExam />)
-      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
+      expect(await screen.findByText(/used or still in progress/i)).toBeTruthy()
       Object.assign(mockPremium, { isPremium: true, unlimited: true })
       mockGate.fullMockAllowed = true
       await act(async () => { rerender(<BlueprintExam />) })
       expect(mockFullMockAllowedNow).toHaveBeenCalledTimes(2)
-      expect(screen.queryByText(/used your free full mock/i)).toBeNull()
+      expect(screen.queryByText(/used or still in progress/i)).toBeNull()
       expect(screen.getByRole('button', { name: 'Full Mock' })).toBeTruthy()
     })
 
@@ -658,13 +658,13 @@ describe('BlueprintExam', () => {
       Object.assign(mockPremium, { loading: false })
       mockGate.fullMockAllowed = false
       await act(async () => { rerender(<BlueprintExam />) })
-      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
+      expect(await screen.findByText(/used or still in progress/i)).toBeTruthy()
     })
 
     it('with a free mock left (or the flag off), Full Mock starts as before', async () => {
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
-      expect(screen.queryByText(/used your free full mock/i)).toBeNull()
+      expect(screen.queryByText(/used or still in progress/i)).toBeNull()
     })
   })
 

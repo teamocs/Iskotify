@@ -24,7 +24,7 @@ describe('UpgradeCard', () => {
   })
 
   it('uses the agreed friendly practice wording', () => {
-    expect(PRACTICE_CAP_BODY).toBe("You've done your 30 free questions today. Come back tomorrow, or unlock unlimited practice.")
+    expect(PRACTICE_CAP_BODY).toBe("Your 30 free questions for today are used or held in an unfinished run. Finish that run, come back tomorrow, or unlock unlimited practice.")
   })
 })
 
