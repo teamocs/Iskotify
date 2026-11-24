@@ -26,7 +26,7 @@ export const runtime = 'nodejs'
 //   3. the session must be exactly ours: PHP 500, an 'ISK-' reference number,
 //      and livemode matching PAYMONGO_SECRET_KEY (sk_live_ / sk_test_). Otherwise
 //      (or with no valid user) it stays on record for manual review: 200, no grant;
-//   4. grant_entitlement(user, 'web') (a failure forgets the event and answers
+//   4. grant_entitlement(user, 'web') (a failure leaves it unprocessed and answers
 //      500 so PayMongo's retry can grant);
 //   5. best effort: a promotional 'premium' entitlement in RevenueCat, so the
 //      Android app sees it. Failure is logged, never a retry.

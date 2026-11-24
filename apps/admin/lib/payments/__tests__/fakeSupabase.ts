@@ -12,7 +12,7 @@ export function fakeSupabase() {
   const tokens = new Map<string, string>()
 
   // Mirrors migration 067's grant_entitlement / revoke_play_entitlement.
-  const rpc = vi.fn(async (fn: string, args: { p_uid: string; p_source?: string }) => {
+  const rpc = vi.fn(async (fn: string, args: { p_uid: string; p_source?: string; p_premium?: boolean; p_event_at?: string | null }) => {
     if (fail.rpc) return { data: null, error: { message: 'db down' } }
     const now = new Date().toISOString()
     const e = entitlements.get(args.p_uid)
@@ -21,6 +21,20 @@ export function fakeSupabase() {
       entitlements.set(args.p_uid, {
         user_id: args.p_uid, premium: true, source: args.p_source,
         granted_at: e?.premium ? (e.granted_at ?? now) : now, revoked_at: null, updated_at: now,
+      })
+      return { data: true, error: null }
+    }
+    // Mirrors migration 075's apply_play_event.
+    if (fn === 'apply_play_event') {
+      const at = args.p_event_at ?? now
+      if (e?.play_event_at && (e.play_event_at as string) > at) return { data: false, error: null }
+      const kept = !!e?.premium && e.source !== 'play'
+      entitlements.set(args.p_uid, {
+        ...e, user_id: args.p_uid, premium: kept || args.p_premium!,
+        source: kept ? e!.source : args.p_premium ? 'play' : e?.source ?? 'play',
+        granted_at: args.p_premium ? (e?.premium ? e.granted_at ?? now : now) : e?.granted_at ?? null,
+        revoked_at: kept ? e!.revoked_at : args.p_premium ? null : e && !e.premium ? e.revoked_at : now,
+        updated_at: now, play_event_at: at,
       })
       return { data: true, error: null }
     }

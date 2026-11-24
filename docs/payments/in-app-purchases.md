@@ -77,7 +77,8 @@ user id from a device).
 | Play refund / expiry | removes **only** a `play` grant |
 | Play purchase moved to another account (TRANSFER) | old account loses `play`, new account gets it |
 | Later Play grant while a web/grandfather/admin grant is active | ignored (keeps the stronger grant) |
-| Same event delivered twice | processed once (`payment_events.id`) |
+| Same event delivered twice | processed once (`payment_events.processed_at`) |
+| Play events out of order | the newest by event time wins (`entitlements.play_event_at`) |
 
 A web payment is granted only if it is exactly **50000 centavos, PHP**, live mode
 matches the secret key (`sk_live_` ⇒ live), and the reference starts with `ISK-`.
@@ -238,7 +239,7 @@ in the same PR.
 **Database** — `supabase/migrations/067_entitlements_and_payments.sql`
 - `public.entitlements` — students can read their own row only; no client writes.
 - `public.payment_events` — service role only; idempotency + purchase records.
-- `public.grant_entitlement(uuid, text)`, `public.revoke_play_entitlement(uuid)` — service role only.
+- `public.apply_play_event(uuid, boolean, timestamptz)` (Play webhook), `public.grant_entitlement(uuid, text)`, `public.revoke_play_entitlement(uuid)` — service role only.
 - `public.delete_user_data` — deletes entitlements, unlinks payment events.
 - Related: 066 stops students editing `profiles.role` (and anything not listed).
 

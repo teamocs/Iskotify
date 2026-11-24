@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { classifyRevenueCatEvent, minimalRevenueCatPayload, type RevenueCatDecision } from '@/lib/payments/entitlementRules'
 import { safeEqual } from '@/lib/payments/signature'
-import { markProcessed, grantEntitlement, recordEvent, revokePlayEntitlement, userExists } from '@/lib/payments/store'
+import { applyPlayEvent, markProcessed, recordEvent, userExists } from '@/lib/payments/store'
 
 export const runtime = 'nodejs'
 
@@ -22,8 +22,8 @@ export const runtime = 'nodejs'
 //   non-PRODUCTION events -> ignored unless REVENUECAT_ALLOW_SANDBOX === 'true'
 // Every verified event is recorded in payment_events as a MINIMAL record (no user
 // ids, aliases or subscriber attributes); event.id is the idempotency key. A
-// failed write forgets the event and answers 500 so RevenueCat retries; every
-// write is idempotent, so a retry may safely repeat a partly applied transfer.
+// failed write leaves the event unprocessed and answers 500 so RevenueCat retries;
+// writes apply by event time (075), so a retry never undoes a newer event.
 //
 // Not gated by PAYMENTS_ENABLED: a purchase that did happen is always honoured;
 // without REVENUECAT_WEBHOOK_AUTH nothing is accepted.
@@ -34,6 +34,13 @@ const json = (body: unknown, status = 200) => NextResponse.json(body, { status, 
 function amountCentavos(e: Record<string, unknown>): number | null {
   const v = e.price_in_purchased_currency
   return e.currency === 'PHP' && typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) : null
+}
+
+/** When the event happened (RevenueCat's event_timestamp_ms), or null when unusable. */
+function eventTime(e: Record<string, unknown>): string | null {
+  const ms = e.event_timestamp_ms
+  // A future time (beyond clock skew) would block the user's later events.
+  return typeof ms === 'number' && ms > 0 && ms < Date.now() + 10 * 60_000 ? new Date(ms).toISOString() : null
 }
 
 export async function POST(req: NextRequest) {
@@ -111,16 +118,17 @@ export async function POST(req: NextRequest) {
     return json({ received: true, ignored: true })
   }
 
+  const at = eventTime(event)
   try {
     if (decision.kind === 'grant') {
-      const written = await grantEntitlement(db, decision.userId, 'play')
+      const written = await applyPlayEvent(db, decision.userId, true, at)
       console.info('[payments/revenuecat]', type, eventId, 'grant', written ? 'written' : 'unchanged')
     } else if (decision.kind === 'revoke') {
-      const written = await revokePlayEntitlement(db, decision.userId)
+      const written = await applyPlayEvent(db, decision.userId, false, at)
       console.info('[payments/revenuecat]', type, eventId, 'revoke', written ? 'written' : 'unchanged')
     } else {
-      for (const id of decision.revokeFrom) await revokePlayEntitlement(db, id)
-      for (const id of decision.grantTo) await grantEntitlement(db, id, 'play')
+      for (const id of decision.revokeFrom) await applyPlayEvent(db, id, false, at)
+      for (const id of decision.grantTo) await applyPlayEvent(db, id, true, at)
       console.info('[payments/revenuecat] TRANSFER', eventId, `revoked ${decision.revokeFrom.length}, granted ${decision.grantTo.length}`)
     }
     await markProcessed(db, eventId)

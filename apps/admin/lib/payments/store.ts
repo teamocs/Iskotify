@@ -56,9 +56,13 @@ export async function grantEntitlement(db: Db, userId: string, source: Entitleme
   return data === true
 }
 
-/** Revokes a 'play' grant only, atomically (067). False when there was none to revoke. */
-export async function revokePlayEntitlement(db: Db, userId: string): Promise<boolean> {
-  const { data, error } = await db.rpc('revoke_play_entitlement', { p_uid: userId })
-  if (error) throw new Error(`revoke_play_entitlement failed: ${error.message}`)
+/**
+ * Applies a Play purchase (premium) or refund/expiry/transfer-away (not premium) by the
+ * time it happened (075). False when a newer Play event was already applied. Never
+ * touches an active web/grandfather/admin grant.
+ */
+export async function applyPlayEvent(db: Db, userId: string, premium: boolean, eventAt: string | null): Promise<boolean> {
+  const { data, error } = await db.rpc('apply_play_event', { p_uid: userId, p_premium: premium, p_event_at: eventAt })
+  if (error) throw new Error(`apply_play_event failed: ${error.message}`)
   return data === true
 }

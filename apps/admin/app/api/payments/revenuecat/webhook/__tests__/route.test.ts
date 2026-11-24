@@ -95,7 +95,7 @@ describe('POST /api/payments/revenuecat/webhook: purchases', () => {
       expect(db.events.get('rc-evt-1')).toMatchObject({
         id: 'rc-evt-1', provider: 'revenuecat', user_id: UID, type, amount_centavos: 50000,
       })
-      expect(db.client.rpc).toHaveBeenCalledWith('grant_entitlement', { p_uid: UID, p_source: 'play' })
+      expect(db.client.rpc).toHaveBeenCalledWith('apply_play_event', { p_uid: UID, p_premium: true, p_event_at: null })
     })
   }
 
@@ -120,7 +120,7 @@ describe('POST /api/payments/revenuecat/webhook: purchases', () => {
     const web = playRow({ source: 'web' })
     db.entitlements.set(UID, web)
     await POST(req(rcEvent()))
-    expect(db.entitlements.get(UID)).toBe(web)
+    expect(db.entitlements.get(UID)).toMatchObject(web)
   })
 
   it('records no amount for a non-PHP purchase', async () => {
@@ -152,7 +152,7 @@ describe('POST /api/payments/revenuecat/webhook: refunds and expiry', () => {
     const row = db.entitlements.get(UID)!
     expect(row).toMatchObject({ premium: false, source: 'play', granted_at: '2026-01-01T00:00:00.000Z' })
     expect(typeof row.revoked_at).toBe('string')
-    expect(db.client.rpc).toHaveBeenCalledWith('revoke_play_entitlement', { p_uid: UID })
+    expect(db.client.rpc).toHaveBeenCalledWith('apply_play_event', { p_uid: UID, p_premium: false, p_event_at: null })
   })
 
   it('EXPIRATION revokes a play grant', async () => {
@@ -166,7 +166,7 @@ describe('POST /api/payments/revenuecat/webhook: refunds and expiry', () => {
       const kept = playRow({ source })
       db.entitlements.set(UID, kept)
       await POST(req(rcEvent({ id: `rc-${source}`, type: 'CANCELLATION', cancel_reason: 'CUSTOMER_SUPPORT' })))
-      expect(db.entitlements.get(UID), source).toBe(kept)
+      expect(db.entitlements.get(UID), source).toMatchObject(kept)
     }
   })
 
@@ -174,13 +174,13 @@ describe('POST /api/payments/revenuecat/webhook: refunds and expiry', () => {
     const kept = playRow()
     db.entitlements.set(UID, kept)
     await POST(req(rcEvent({ id: 'rc-evt-2', type: 'CANCELLATION', cancel_reason: 'UNSUBSCRIBE' })))
-    expect(db.entitlements.get(UID)).toBe(kept)
+    expect(db.entitlements.get(UID)).toMatchObject(kept)
   })
 
-  it('a revoke for a user with no row writes nothing', async () => {
+  it('a revoke for a user with no row leaves them free (and remembers when)', async () => {
     const res = await POST(req(rcEvent({ type: 'EXPIRATION' })))
     expect(res.status).toBe(200)
-    expect(db.entitlements.size).toBe(0)
+    expect(db.entitlements.get(UID)).toMatchObject({ premium: false, granted_at: null })
   })
 })
 
@@ -260,7 +260,7 @@ describe('POST /api/payments/revenuecat/webhook: TRANSFER moves premium', () => 
     const web = playRow({ source: 'web' })
     db.entitlements.set(UID, web)
     await POST(req(transfer()))
-    expect(db.entitlements.get(UID)).toBe(web)
+    expect(db.entitlements.get(UID)).toMatchObject(web)
     expect(db.entitlements.get(UID2)).toMatchObject({ premium: true })
   })
 
@@ -290,6 +290,42 @@ describe('POST /api/payments/revenuecat/webhook: TRANSFER moves premium', () => 
     db.entitlements.set(UID, { ...db.entitlements.get(UID)!, premium: false })
     expect(await (await POST(req(rcEvent()))).json()).toMatchObject({ duplicate: true })
     expect(db.entitlements.get(UID)).toMatchObject({ premium: false })
+  })
+
+  describe('events apply in the order they happened, not arrived', () => {
+    const bought = (over = {}) => rcEvent({ event_timestamp_ms: 1_000, ...over })
+    const refund = (over = {}) => rcEvent({ id: 'rc-refund', type: 'CANCELLATION', cancel_reason: 'CUSTOMER_SUPPORT', event_timestamp_ms: 2_000, ...over })
+
+    it('a purchase retried after its refund does not grant again', async () => {
+      db.fail.rpc = true
+      expect((await POST(req(bought()))).status).toBe(500)
+      db.fail.rpc = false
+      expect((await POST(req(refund()))).status).toBe(200)
+      expect((await POST(req(bought()))).status).toBe(200)
+      expect(db.entitlements.get(UID)).toMatchObject({ premium: false })
+    })
+
+    it('a late refund of an old purchase does not revoke a newer purchase', async () => {
+      await POST(req(bought({ id: 'rc-2', event_timestamp_ms: 3_000 })))
+      await POST(req(refund()))
+      expect(db.entitlements.get(UID)).toMatchObject({ premium: true, source: 'play' })
+    })
+
+    it('buying again after a refund grants', async () => {
+      await POST(req(bought()))
+      await POST(req(refund()))
+      await POST(req(bought({ id: 'rc-2', event_timestamp_ms: 3_000 })))
+      expect(db.entitlements.get(UID)).toMatchObject({ premium: true, revoked_at: null })
+    })
+
+    it('passes the event time, or null when it is missing or not a sane number', async () => {
+      await POST(req(bought()))
+      expect(db.client.rpc).toHaveBeenLastCalledWith('apply_play_event', { p_uid: UID, p_premium: true, p_event_at: new Date(1_000).toISOString() })
+      for (const [i, bad] of [undefined, 'x', Number.MAX_VALUE, Date.now() + 86_400_000, -1].entries()) {
+        await POST(req(rcEvent({ id: `rc-bad-${i}`, event_timestamp_ms: bad })))
+        expect(db.client.rpc).toHaveBeenLastCalledWith('apply_play_event', { p_uid: UID, p_premium: true, p_event_at: null })
+      }
+    })
   })
 
   it('a failed write leaves the event unprocessed so the retry can finish the transfer', async () => {
