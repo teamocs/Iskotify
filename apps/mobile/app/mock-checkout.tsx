@@ -27,10 +27,12 @@ export default function MockCheckoutScreen() {
     if (busy) return
     setBusy(true)
     setFailed(false)
-    const ok = await callMockPayment({ action: 'pay', reference: reference as string })
-    setBusy(false)
-    if (ok) back('success')
-    else setFailed(true)
+    try {
+      if (await callMockPayment({ action: 'pay', reference: reference as string })) back('success')
+      else setFailed(true)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
