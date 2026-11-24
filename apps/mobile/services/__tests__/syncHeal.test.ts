@@ -343,7 +343,7 @@ describe('syncHeal — syncRev cursor heal', () => {
     supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
   })
 
-  it('uses epoch since when syncRev=0 (needs heal), and persists syncRev=2 after sync', async () => {
+  it('uses epoch since when syncRev=0 (needs heal), and persists syncRev=3 after sync', async () => {
     const raw = makeHealDb()
     // Device state: lastSyncedAt=T2=5000ms, syncRev=0
     const T2 = 5000
@@ -361,35 +361,13 @@ describe('syncHeal — syncRev cursor heal', () => {
     // Must have pulled with epoch since (full re-pull) not T2
     expect(capturedGt.value).toBe('1970-01-01T00:00:00.000Z')
 
-    // syncRev=2 must be persisted in user_settings (SYNC_REV bumped to 2)
+    // syncRev=3 must be persisted in user_settings (SYNC_REV bumped to 3)
     const row = raw.prepare('SELECT sync_rev FROM user_settings WHERE id = 1').get() as any
     expect(row).toBeTruthy()
-    expect(row.sync_rev).toBe(2)
+    expect(row.sync_rev).toBe(3)
   })
 
-  it('uses epoch since when syncRev=1 (below SYNC_REV=2, needs heal)', async () => {
-    const raw = makeHealDb()
-    const T2 = 5000
-    raw.prepare(
-      'INSERT INTO user_settings (id, selected_listing_slug, last_synced_at, sync_rev) VALUES (1, ?, ?, 1)'
-    ).run('upcat', T2)
-
-    const settingsRow = { id: 1, selectedListingSlug: 'upcat', lastSyncedAt: T2, syncRev: 1 }
-    const capturedGt: { value: string | null } = { value: null }
-    makeEmptySupabase(capturedGt)
-
-    const db = makeHealSyncDb(raw, settingsRow)
-    await syncOnLaunch(db as any)
-
-    // syncRev=1 < SYNC_REV=2 → must still use epoch for full re-pull
-    expect(capturedGt.value).toBe('1970-01-01T00:00:00.000Z')
-
-    // syncRev bumped to 2
-    const row = raw.prepare('SELECT sync_rev FROM user_settings WHERE id = 1').get() as any
-    expect(row.sync_rev).toBe(2)
-  })
-
-  it('uses incremental cursor when syncRev=2 (already healed to current rev)', async () => {
+  it('uses epoch since when syncRev=2 (below SYNC_REV=3, needs heal)', async () => {
     const raw = makeHealDb()
     const T2 = 5000
     raw.prepare(
@@ -403,16 +381,38 @@ describe('syncHeal — syncRev cursor heal', () => {
     const db = makeHealSyncDb(raw, settingsRow)
     await syncOnLaunch(db as any)
 
+    // syncRev=2 < SYNC_REV=3 → must still use epoch for full re-pull
+    expect(capturedGt.value).toBe('1970-01-01T00:00:00.000Z')
+
+    // syncRev bumped to 3
+    const row = raw.prepare('SELECT sync_rev FROM user_settings WHERE id = 1').get() as any
+    expect(row.sync_rev).toBe(3)
+  })
+
+  it('uses incremental cursor when syncRev=3 (already healed to current rev)', async () => {
+    const raw = makeHealDb()
+    const T2 = 5000
+    raw.prepare(
+      'INSERT INTO user_settings (id, selected_listing_slug, last_synced_at, sync_rev) VALUES (1, ?, ?, 3)'
+    ).run('upcat', T2)
+
+    const settingsRow = { id: 1, selectedListingSlug: 'upcat', lastSyncedAt: T2, syncRev: 3 }
+    const capturedGt: { value: string | null } = { value: null }
+    makeEmptySupabase(capturedGt)
+
+    const db = makeHealSyncDb(raw, settingsRow)
+    await syncOnLaunch(db as any)
+
     // Must NOT use epoch — must use the actual lastSyncedAt cursor
     expect(capturedGt.value).not.toBe('1970-01-01T00:00:00.000Z')
     expect(capturedGt.value).toBe(new Date(T2).toISOString())
 
-    // syncRev stays 2
+    // syncRev stays 3
     const row = raw.prepare('SELECT sync_rev FROM user_settings WHERE id = 1').get() as any
-    expect(row.sync_rev).toBe(2)
+    expect(row.sync_rev).toBe(3)
   })
 
-  it('cursor write (lastSyncedAt + syncRev=2) is persisted after first sync', async () => {
+  it('cursor write (lastSyncedAt + syncRev=3) is persisted after first sync', async () => {
     const raw = makeHealDb()
     // Fresh device: lastSyncedAt=0, syncRev=0
     raw.prepare(
@@ -434,7 +434,7 @@ describe('syncHeal — syncRev cursor heal', () => {
     expect(row.last_synced_at).toBeGreaterThanOrEqual(before - 60_000)
     expect(row.last_synced_at).toBeLessThanOrEqual(after - 60_000 + 100)
     // syncRev written in the LAST transaction (the cursor write)
-    expect(row.sync_rev).toBe(2)
+    expect(row.sync_rev).toBe(3)
   })
 })
 
@@ -465,7 +465,7 @@ describe('syncOnLaunch — guest (catalog only)', () => {
       expect(tables).toContain(t)
     }
     const row = raw.prepare('SELECT last_synced_at, sync_rev, full_name, consented_at, owner_user_id FROM user_settings WHERE id = 1').get() as any
-    expect(row.sync_rev).toBe(2)
+    expect(row.sync_rev).toBe(3)
     expect(row.last_synced_at).toBeGreaterThan(0)
     // Nothing personal appears.
     expect(row).toMatchObject({ full_name: '', consented_at: 0, owner_user_id: '' })

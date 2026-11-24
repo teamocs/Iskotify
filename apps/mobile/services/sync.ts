@@ -27,7 +27,10 @@ import { hasFreshGuestPreviewMarker } from './guestPreviewMarker'
 // tables (career, university, blueprint) now use an updated_at cursor instead
 // of full-pull, and flashcards gains a local status column. A full re-pull
 // baselines all devices with the correct status values.
-const SYNC_REV = 2
+// Reason for rev 3: until this build a catalog pull that failed was read as "no
+// changes" and the cursor still advanced, so rows changed in that window never
+// arrived. A full re-pull recovers them.
+const SYNC_REV = 3
 import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
@@ -116,7 +119,7 @@ const FLASHCARDS_COLUMNS_LEGACY = `${FLASHCARDS_BASE_COLUMNS},updated_at`
  * fallback above. Empty contentSlugs short-circuits to [] exactly like the
  * previous inline `contentSlugs.length === 0 ? [] : …` guard.
  */
-async function fetchFlashcardsForSlugs(contentSlugs: string[], since: string): Promise<any[]> {
+async function fetchFlashcardsForSlugs(contentSlugs: string[], sinceFor: (slug: string) => string): Promise<any[]> {
   const run = async (columns: string): Promise<any[]> => {
     if (contentSlugs.length === 0) return []
     const cardResults = await Promise.all(
@@ -124,7 +127,7 @@ async function fetchFlashcardsForSlugs(contentSlugs: string[], since: string): P
         fetchAllPaginated((from, to) => supabase.from('flashcards')
           .select(columns)
           .contains('listing_slugs', [slug])
-          .gt('updated_at', since)
+          .gt('updated_at', sinceFor(slug))
           .order('id')
           .range(from, to)))
     )
@@ -1020,12 +1023,29 @@ export async function syncOnLaunch(db: DrizzleClient, opts: SyncOnLaunchOptions 
         .gt('updated_at', since),
     ])
 
+    // A failed pull must fail the sync here, before any local write and before the
+    // cursor moves: the `data ?? []` below would read it as "nothing changed" and
+    // the rows changed in this window would never be pulled again.
+    const failedPull = Object.entries({
+      listings: listingsRes, flashcard_subjects: subjectsRes, flashcard_topics: topicsRes,
+      admissions_updates: admissionsUpdatesRes,
+      upcat_passages: upcatPassagesRes, upcat_facts: upcatFactsRes, upcat_cutoffs: upcatCutoffsRes,
+      career_courses: careerCoursesRes, career_countries: careerCountriesRes, career_programs: careerProgramsRes,
+      ai_career_impact: aiCareerImpactRes, career_destinations: careerDestinationsRes, career_facts: careerFactsRes,
+      tertiary_schools: tertiarySchoolsRes, university_profiles: universityProfilesRes,
+      course_school_quality: courseSchoolQualityRes, bar_results: barResultsRes, course_taxonomy_map: courseTaxonomyMapRes,
+      exam_skill_categories: skillCatRes, exam_blueprints: blueprintsRes,
+      exam_blueprint_sections: sectionsRes, exam_course_notes: courseNotesRes,
+    }).find(([, res]) => res.error)
+    if (failedPull) throw new Error(`${failedPull[0]} pull failed: ${failedPull[1].error!.message}`)
+
     // Sections are replaced per blueprint (a section the admin removed leaves no row to
     // arrive in a delta pull, so upserting alone keeps it on devices forever). For every
     // blueprint touched by this pull (blueprint row or any of its sections changed) fetch
     // ALL of its sections, so a partial delta can never delete the untouched ones. If that
     // read fails, fall back to upserting the delta and keep local sections (never delete
-    // on an unreliable read). The read is paged (a truncated read must not delete the
+    // on an unreliable read), and leave the cursor where it was so the next sync pulls
+    // the same delta and tries the replace again. The read is paged (a truncated read must not delete the
     // rest), and a slug is only replaced when the read returned at least one row for it:
     // an empty result can be the admin's non-atomic delete-then-insert window, and a
     // blueprint with no sections is not a state worth wiping a device to match.
@@ -1034,6 +1054,7 @@ export async function syncOnLaunch(db: DrizzleClient, opts: SyncOnLaunchOptions 
       ...(sectionsRes.data ?? []).map((r: any) => r.blueprint_slug as string),
     ].filter(Boolean))]
     let fullSectionRows: any[] | null = null
+    let sectionsReadFailed = false
     if (changedBlueprintSlugs.length > 0) {
       try {
         fullSectionRows = await fetchAllPaginated((from, to) => supabase.from('exam_blueprint_sections')
@@ -1042,6 +1063,7 @@ export async function syncOnLaunch(db: DrizzleClient, opts: SyncOnLaunchOptions 
           .order('id')
           .range(from, to))
       } catch (err) {
+        sectionsReadFailed = true
         console.warn('[sync] exam_blueprint_sections full fetch failed — keeping local sections:', err)
       }
     }
@@ -1053,7 +1075,13 @@ export async function syncOnLaunch(db: DrizzleClient, opts: SyncOnLaunchOptions 
     // Skipped entirely for focus-less sessions; the catalog above still synced.
     // Uses contentSlugs (school: mapped to general-cet) so school-focus users
     // actually receive their review deck.
-    const allCards = await fetchFlashcardsForSlugs(contentSlugs, since)
+    // The cursor is global, so the older cards of a focus added after it are behind
+    // it: pull that slug from epoch (addedAt and the cursor are both this device's clock).
+    const newFocusSlugs = new Set(focusRows
+      .filter(r => r.addedAt > settings.lastSyncedAt)
+      .map(r => (isSchoolFocusSlug(r.listingSlug) ? 'general-cet' : r.listingSlug)))
+    const allCards = await fetchFlashcardsForSlugs(contentSlugs,
+      slug => (newFocusSlugs.has(slug) ? '1970-01-01T00:00:00.000Z' : since))
 
     // Unpublished / deleted questions, flashcards and topics (migration 065 hides
     // them from the pulls above). Fetched AFTER the pulls so it reflects a state no
@@ -1418,16 +1446,17 @@ export async function syncOnLaunch(db: DrizzleClient, opts: SyncOnLaunchOptions 
       // a focus-less session must not clobber it with undefined/empty. Uses
       // contentSlugs so a school-only focus stores 'general-cet' (a real
       // content slug) instead of the school pseudo-slug.
-      const syncedAt = syncStartedAt - SYNC_CURSOR_MARGIN_MS
+      const syncedAt = sectionsReadFailed ? settings.lastSyncedAt : syncStartedAt - SYNC_CURSOR_MARGIN_MS
+      const syncRev = sectionsReadFailed ? (settings.syncRev ?? 0) : SYNC_REV
       if (contentSlugs.length > 0) {
         tx.insert(userSettings)
-          .values({ id: 1, selectedListingSlug: contentSlugs[0]!, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
-          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: contentSlugs[0]!, syncRev: SYNC_REV } })
+          .values({ id: 1, selectedListingSlug: contentSlugs[0]!, lastSyncedAt: syncedAt, syncRev })
+          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: contentSlugs[0]!, syncRev } })
           .run()
       } else {
         tx.insert(userSettings)
-          .values({ id: 1, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
-          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, syncRev: SYNC_REV } })
+          .values({ id: 1, lastSyncedAt: syncedAt, syncRev })
+          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, syncRev } })
           .run()
       }
     })

@@ -57,7 +57,7 @@ function makeDb(lastSyncedAt: number) {
   const raw = new Database(':memory:')
   raw.exec(CREATE_SQL)
   for (const sql of MIGRATIONS) { try { raw.exec(sql) } catch { /* dup column on re-run */ } }
-  raw.prepare('INSERT INTO user_settings (id, last_synced_at, sync_rev) VALUES (1, ?, 2) ON CONFLICT(id) DO UPDATE SET last_synced_at = excluded.last_synced_at, sync_rev = 2').run(lastSyncedAt)
+  raw.prepare('INSERT INTO user_settings (id, last_synced_at, sync_rev) VALUES (1, ?, 3) ON CONFLICT(id) DO UPDATE SET last_synced_at = excluded.last_synced_at, sync_rev = 3').run(lastSyncedAt)
   const db = drizzle(raw, { schema }) as unknown as DrizzleClient
   return { raw, db }
 }
