@@ -288,6 +288,7 @@ export default function BlueprintExam() {
   const [resumeAvailable, setResumeAvailable] = useState(false)
   // P3 Full Access: the free full mock for this exam is used up (never true with the paywall flag off).
   const [fullMockLocked, setFullMockLocked] = useState(false)
+  const startingRef = useRef(false)
   const { unlimited: premiumUnlimited, loading: premiumLoading } = usePremium()
   // The saved run's time already ran out: offer Submit / Discard, never a silent auto-submit.
   const [resumeStale, setResumeStale] = useState(false)
@@ -578,9 +579,16 @@ export default function BlueprintExam() {
   //     'full' reuses the sample already built at load (scaled timing per `timing`).
   //     'sprint' rebuilds a smaller, 30-min-fixed sample from the same raw pools and
   //     never section-locks (examMode gates `sectionBlocked` above). ---
-  function startExam(mode: 'full' | 'sprint') {
-    if (!blueprint) return
-    if (mode === 'full' && fullMockLocked) return
+  async function startExam(mode: 'full' | 'sprint') {
+    if (!blueprint || startingRef.current) return
+    if (mode === 'full') {
+      if (fullMockLocked) return
+      // Ask again at the tap: on a direct page load the check above may not be in yet.
+      startingRef.current = true
+      const ok = await fullMockAllowedNow(db, slug, runKeyFor('exam', slug)).finally(() => { startingRef.current = false })
+      if (runRef.current.status !== 'prestart') return
+      if (!ok) { setFullMockLocked(true); return }
+    }
     setExamMode(mode)
     const now = Date.now()
     setStartedAt(now)
@@ -612,12 +620,12 @@ export default function BlueprintExam() {
   /** One saved run per exam: starting the other mode replaces it, so ask first. */
   function requestStart(mode: 'full' | 'sprint') {
     const savedMode = savedRunRef.current?.mode === 'sprint' ? 'sprint' : 'full'
-    if (!resumeAvailable || savedMode === mode) { startExam(mode); return }
+    if (!resumeAvailable || savedMode === mode) { void startExam(mode); return }
     confirmAction(
       mode === 'sprint' ? 'Start a Study Sprint?' : 'Start a Full Mock?',
       `Your saved ${savedMode === 'sprint' ? 'Study Sprint' : 'Full Mock'} will be replaced and its answers lost.`,
       'Start',
-      () => startExam(mode),
+      () => void startExam(mode),
       { destructive: true },
     )
   }

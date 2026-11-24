@@ -88,10 +88,12 @@ async function doRefresh(db: DrizzleClient, gen: number): Promise<boolean> {
   }
   // The cache counts only for the account it was written for.
   const cached = cache.premium && cache.userId === userId
-  // Show the cached answer straight away; the network answer follows.
-  if (snapshot.loading) set({ isPremium: cached, loading: false })
+  // Show cached access straight away; the network answer follows. No cached access is
+  // not an answer yet (a payer on a new browser has none): stay loading for the row.
+  if (snapshot.loading && cached) set({ isPremium: true, loading: false })
   // RevenueCat follows the signed-in Supabase account (purchases are attributed to it).
-  await storeLogIn(userId)
+  // Not awaited before the row: a slow store must not delay the answer.
+  const login = storeLogIn(userId).catch(e => console.warn('[premium] store login failed:', e))
   const row = await fetchEntitlementPremium(userId)
   if (stale()) return snapshot.isPremium
   const premium = resolvePremium({ signedIn: true, row, cached })
@@ -101,7 +103,21 @@ async function doRefresh(db: DrizzleClient, gen: number): Promise<boolean> {
   }
   if (stale()) return snapshot.isPremium
   set({ isPremium: premium, loading: false })
+  await login
   return premium
+}
+
+/**
+ * Wait (briefly) for the first answer. A direct page load on web reaches the practice
+ * gates before it is in; deciding then would hand every free student unlimited access.
+ */
+export function whenPremiumReady(timeoutMs = 5000): Promise<void> {
+  if (!snapshot.loading) return Promise.resolve()
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(timer); unsubscribe(); resolve() }
+    const unsubscribe = subscribePremium(() => { if (!snapshot.loading) done() })
+    const timer = setTimeout(done, timeoutMs)
+  })
 }
 
 /** Re-check Full Access now. Concurrent calls share one check. */

@@ -15,6 +15,8 @@ import { usePremium } from '../hooks/usePremium'
 import { PURCHASE_CHANNEL, getFullAccessPrice, storeAvailable } from '../services/premium'
 import { buyFullAccess, restoreFullAccessForUser, confirmPurchase, pollPremium } from '../services/premiumState'
 import { supabase } from '../services/supabase'
+import { callMockPayment } from '../services/entitlements'
+import { isPaywallPreview, setPaywallPreview } from '../utils/paywallPreview'
 import { capture } from '../lib/analytics'
 import { FREE_DAILY_PRACTICE_QUESTIONS, FREE_FULL_MOCKS_PER_EXAM } from '../utils/premiumLimits'
 
@@ -117,7 +119,7 @@ function Benefit({ t, icon, title, free }: { t: Theme; icon: Icon; title: string
 }
 
 export default function UpgradeScreen() {
-  const { status: returnStatus, from } = useLocalSearchParams<{ status?: string; from?: string }>()
+  const { status: returnStatus, from, preview } = useLocalSearchParams<{ status?: string; from?: string; preview?: string }>()
   const { enabled, isPremium } = usePremium()
   const { theme: t } = useTheme()
   const play = PURCHASE_CHANNEL === 'play'
@@ -138,6 +140,24 @@ export default function UpgradeScreen() {
   }, [])
   const signal = () => life.current.signal
   const gone = () => life.current.signal.aborted
+
+  // Staff: /upgrade?preview=on|off shows the paywall in this browser only. The paywall
+  // state is read at startup, so reload without the query.
+  const switching = Platform.OS === 'web' && (preview === 'on' || preview === 'off')
+  useEffect(() => {
+    if (!switching) return
+    setPaywallPreview(preview === 'on')
+    window.location.replace(preview === 'on' ? '/upgrade' : '/profile')
+  }, [switching, preview])
+
+  // Web: the browser's Back button from the checkout page restores this page as it
+  // was left, with the button still busy.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.addEventListener) return
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) setPhase(p => (p === 'working' ? 'idle' : p)) }
+    window.addEventListener('pageshow', onShow)
+    return () => window.removeEventListener('pageshow', onShow)
+  }, [])
 
   useEffect(() => {
     if (!enabled) return
@@ -215,6 +235,12 @@ export default function UpgradeScreen() {
 
   const checkAgain = () => once(() => confirm(() => pollPremium({ signal: signal() })))
 
+  const removeTestPurchase = () => once(async () => {
+    await callMockPayment({ action: 'reset' })
+    window.location.replace('/upgrade')
+  })
+
+  if (switching) return null
   if (!enabled) return <Redirect href="/profile" />
 
   const failed = typeof phase === 'object' ? phase : null
@@ -223,7 +249,9 @@ export default function UpgradeScreen() {
 
   const statusMessage =
     phase === 'confirming' ? 'Confirming your purchase. This takes a few seconds.'
-    : phase === 'pending' ? "Your payment went through. Confirming it may take a minute. You can check again, or come back later."
+    : phase === 'pending' ? returnStatus === 'success' && !play
+      ? "We haven't received your payment confirmation yet. It may take a minute. You can check again, or come back later."
+      : "Your payment went through. Confirming it may take a minute. You can check again, or come back later."
     : phase === 'cancelled' ? 'Payment cancelled. Nothing was charged.'
     : phase === 'not_found' ? (play
         ? "We couldn't find a Full Access purchase on this Google account."
@@ -244,6 +272,18 @@ export default function UpgradeScreen() {
       <Hero t={t} />
 
       <View style={{ gap: spacing.xxl }}>
+        {!play && isPaywallPreview() ? (
+          <View style={[card, { gap: spacing.md }]}>
+            <Text role="footnote" color={t.textSecondary}>
+              Test mode: the free limits apply in this browser only.
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+              <Button label="Turn off test mode" variant="secondary" onPress={() => { setPaywallPreview(false); window.location.replace('/profile') }} />
+              {owned ? <Button label="Remove test purchase" variant="ghost" onPress={() => void removeTestPurchase()} /> : null}
+            </View>
+          </View>
+        ) : null}
+
         {owned ? (
           <View
             style={{

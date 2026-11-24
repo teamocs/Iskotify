@@ -555,6 +555,15 @@ function resolveConsent(
   return withdrawn ? { ...merged, ...SENSITIVE_CLEARED } : merged
 }
 
+/** Does the backup focus on an exam this device has not synced review cards for? */
+async function bringsNewFocus(db: DrizzleClient, data: { focus_listings?: unknown; settings?: unknown }, localSlug: string | undefined): Promise<boolean> {
+  const have = new Set((await db.select({ slug: focusListings.listingSlug }).from(focusListings)).map(r => r.slug))
+  if (localSlug) have.add(localSlug)
+  const remoteSlug = (data.settings as { selectedListingSlug?: string } | null)?.selectedListingSlug
+  const wanted = asRows<{ listingSlug?: string }>(data.focus_listings).map(r => r?.listingSlug)
+  return [remoteSlug, ...wanted].some(s => !!s && !have.has(s))
+}
+
 async function markPullOk(db: DrizzleClient): Promise<void> {
   try {
     await db.insert(userSettings)
@@ -657,7 +666,10 @@ async function pullUserDataOnce(db: DrizzleClient): Promise<void> {
         school: str(remoteSettings.school, local?.school, ''),
         gradeLevel: remoteSettings.gradeLevel ?? local?.gradeLevel ?? null,
         selectedListingSlug: str(remoteSettings.selectedListingSlug, local?.selectedListingSlug, ''),
-        lastSyncedAt: 0,  // force catalog re-sync on next launch
+        // The catalog cursor is this device's: web pulls on every page load, so resetting
+        // it here re-downloaded the whole catalog each time. Start over only when this
+        // device has not pulled for the account yet, or the backup brings an exam it lacks.
+        ...(merging || (await bringsNewFocus(db, data, local?.selectedListingSlug)) ? { lastSyncedAt: 0 } : {}),
         notificationsEnabled: remoteSettings.notificationsEnabled ?? local?.notificationsEnabled ?? true,
         dailyReminderHour: remoteSettings.dailyReminderHour ?? local?.dailyReminderHour ?? 9,
         weeklySummaryEnabled: remoteSettings.weeklySummaryEnabled ?? local?.weeklySummaryEnabled ?? true,

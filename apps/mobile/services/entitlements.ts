@@ -8,6 +8,7 @@ import { supabase } from './supabase'
 
 const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.ph'
 export const CHECKOUT_URL = `${ADMIN_BASE_URL}/api/payments/checkout`
+export const MOCK_PAYMENT_URL = `${ADMIN_BASE_URL}/api/payments/mock`
 const REQUEST_TIMEOUT_MS = 20000
 
 /**
@@ -62,8 +63,10 @@ export async function requestCheckout(): Promise<CheckoutResult> {
     try { body = (await res.json()) as typeof body } catch { /* not JSON */ }
     if (res.ok) {
       const url = typeof body.checkoutUrl === 'string' ? body.checkoutUrl : ''
-      // Only ever send the student to a real https checkout page.
-      if (/^https:\/\//i.test(url)) return { ok: true, checkoutUrl: url }
+      // Only ever send the student to an https page, or to this app's own test checkout
+      // (which is http only in local development).
+      const own = typeof window !== 'undefined' ? window.location?.origin : undefined
+      if (/^https:\/\//i.test(url) || (own && url.startsWith(`${own}/`))) return { ok: true, checkoutUrl: url }
       console.warn('[entitlements] checkout answered without a usable link')
       return { ok: false, reason: 'error' }
     }
@@ -75,6 +78,30 @@ export async function requestCheckout(): Promise<CheckoutResult> {
   } catch (e) {
     console.warn('[entitlements] checkout request failed:', e)
     return { ok: false, reason: 'network' }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** The test checkout (admin accounts only; the server decides). True when it went through. */
+export async function callMockPayment(body: { action: 'pay'; reference: string } | { action: 'reset' }): Promise<boolean> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return false
+    const res = await fetch(MOCK_PAYMENT_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) console.warn('[entitlements] mock payment failed:', res.status)
+    return res.ok
+  } catch (e) {
+    console.warn('[entitlements] mock payment request failed:', e)
+    return false
   } finally {
     clearTimeout(timer)
   }

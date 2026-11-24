@@ -9,7 +9,7 @@ type Db = ReturnType<typeof createServerClient>
 
 export type PaymentEvent = {
   id: string
-  provider: 'paymongo' | 'revenuecat'
+  provider: 'paymongo' | 'revenuecat' | 'mock'
   user_id: string | null
   type: string
   amount_centavos: number | null

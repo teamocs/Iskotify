@@ -340,6 +340,31 @@ describe('pullUserData', () => {
     supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
   })
 
+  it('keeps the catalog cursor on a repeat pull; starts over for a new device or a new exam', async () => {
+    const remote = {
+      focus_listings: [{ listingSlug: 'upcat', priority: 0, addedAt: 100 }],
+      saved_decks: [], user_progress: [], practice_sessions: [],
+      settings: { fullName: 'Juan', selectedListingSlug: 'upcat' },
+    }
+    supabase.from.mockReturnValue({
+      select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(),
+      upsert: jest.fn().mockResolvedValue({ error: null }),
+      single: jest.fn(async () => ({ data: remote, error: null })),
+    })
+    const db = makeTestDb()
+    const cursor = async () => (await db.select().from(schema.userSettings))[0]!.lastSyncedAt
+    const synced = () => db.update(schema.userSettings).set({ lastSyncedAt: 5000 })
+    await db.insert(schema.userSettings).values({ id: 1, lastSyncedAt: 5000 })
+    await pullUserData(db)
+    expect(await cursor()).toBe(0) // first pull on this device
+    await synced()
+    await pullUserData(db)
+    expect(await cursor()).toBe(5000) // a page reload
+    remote.focus_listings.push({ listingSlug: 'acet', priority: 1, addedAt: 50 })
+    await pullUserData(db)
+    expect(await cursor()).toBe(0) // an exam added on another device
+  })
+
   it('returns silently when user is not signed in', async () => {
     supabase.auth.getUser.mockResolvedValue({ data: { user: null } })
     const db = makeTestDb()
