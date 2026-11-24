@@ -4,7 +4,7 @@ import {
   CHECKOUT_PAID_EVENT, checkPaidCheckout, expectedLivemode, minimalPaymongoPayload, parsePaymongoEvent,
 } from '@/lib/payments/paymongo'
 import { verifyPaymongoSignature } from '@/lib/payments/signature'
-import { forgetEvent, grantEntitlement, recordEvent, userExists } from '@/lib/payments/store'
+import { markProcessed, grantEntitlement, recordEvent, userExists } from '@/lib/payments/store'
 import { grantRevenueCatPromotional } from '@/lib/payments/revenuecat'
 
 export const runtime = 'nodejs'
@@ -87,6 +87,9 @@ export async function POST(req: NextRequest) {
     return json({ error: 'server_error' }, 500)
   }
 
+  const check = checkPaidCheckout(event, keyLivemode)
+  const reviewReason = !userId ? 'no valid user' : check.ok ? null : (check as { reason: string }).reason
+
   try {
     const recorded = await recordEvent(db, {
       id: event.eventId,
@@ -94,7 +97,7 @@ export async function POST(req: NextRequest) {
       user_id: userId,
       type: event.type,
       amount_centavos: event.amountCentavos,
-      payload: minimalPaymongoPayload(event),
+      payload: { ...minimalPaymongoPayload(event), ...(reviewReason ? { review_reason: reviewReason } : {}) },
     })
     if (recorded === 'duplicate') return json({ received: true, duplicate: true })
   } catch (err) {
@@ -102,21 +105,25 @@ export async function POST(req: NextRequest) {
     return json({ error: 'server_error' }, 500)
   }
 
-  const check = checkPaidCheckout(event, keyLivemode)
-  if (!userId || !check.ok) {
+  if (!userId || reviewReason) {
     // Paid, but not something we can grant (deleted account, tampered metadata,
     // wrong amount/currency/mode, a session we did not create). It is on record
     // for manual review or refund; retrying would not help.
-    const reason = !userId ? 'no valid user' : (check as { reason: string }).reason
-    console.error('[payments/paymongo] PAID checkout not granted; needs manual review:', reason, event.eventId, event.sessionId)
+    console.error('[payments/paymongo] PAID checkout not granted; needs manual review:', reviewReason, event.eventId, event.sessionId)
+    try {
+      await markProcessed(db, event.eventId)
+    } catch (err) {
+      console.error('[payments/paymongo] could not mark event processed:', err)
+      return json({ error: 'server_error' }, 500)
+    }
     return json({ received: true, granted: false })
   }
 
   try {
     await grantEntitlement(db, userId, 'web')
+    await markProcessed(db, event.eventId)
   } catch (err) {
     console.error('[payments/paymongo] grant failed:', err)
-    await forgetEvent(db, event.eventId)
     return json({ error: 'server_error' }, 500)
   }
 

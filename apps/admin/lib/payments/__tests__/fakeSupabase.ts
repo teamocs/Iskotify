@@ -8,7 +8,7 @@ export function fakeSupabase() {
   const entitlements = new Map<string, FakeRow>()
   const events = new Map<string, FakeRow>()
   const users = new Set<string>()
-  const fail = { insertEvent: false, rpc: false, select: false, getUserById: false }
+  const fail = { insertEvent: false, rpc: false, select: false, getUserById: false, markProcessed: false }
   const tokens = new Map<string, string>()
 
   // Mirrors migration 067's grant_entitlement / revoke_play_entitlement.
@@ -53,20 +53,22 @@ export function fakeSupabase() {
         if (table !== 'payment_events') throw new Error(`unexpected insert into ${table}`)
         if (fail.insertEvent) return { error: { code: 'XX000', message: 'db down' } }
         if (events.has(row.id as string)) return { error: { code: '23505', message: 'duplicate key' } }
-        events.set(row.id as string, row)
+        events.set(row.id as string, { processed_at: null, ...row })
         return { error: null }
       }),
       select: vi.fn(() => ({
         eq: vi.fn((_col: string, val: string) => ({
           maybeSingle: vi.fn(async () => {
             if (fail.select) return { data: null, error: { message: 'db down' } }
-            return { data: table === 'entitlements' ? entitlements.get(val) ?? null : null, error: null }
+            const rows = table === 'entitlements' ? entitlements : events
+            return { data: rows.get(val) ?? null, error: null }
           }),
         })),
       })),
-      delete: vi.fn(() => ({
+      update: vi.fn((patch: FakeRow) => ({
         eq: vi.fn(async (_col: string, val: string) => {
-          if (table === 'payment_events') events.delete(val)
+          if (fail.markProcessed) return { error: { message: 'db down' } }
+          if (table === 'payment_events') events.set(val, { ...events.get(val), ...patch })
           return { error: null }
         }),
       })),
