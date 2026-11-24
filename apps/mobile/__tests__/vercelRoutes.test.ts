@@ -35,9 +35,10 @@ describe('vercel.json web routing', () => {
 
   const routes = dynamicRoutes(path.join(root, 'app'))
 
-  it.each(routes)('rewrites the dynamic route /%s to its html file', route => {
+  it.each(routes)('rewrites the dynamic route /%s to its page', route => {
     const source = '/' + route.replace(/\[([^\]]+)\]/g, ':$1')
-    const destination = '/' + route + '.html'
+    // No .html: with cleanUrls Vercel serves the file only at its clean path.
+    const destination = '/' + route
     expect(config.rewrites).toEqual(expect.arrayContaining([{ source, destination }]))
   })
 })
