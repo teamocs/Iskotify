@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardScroll } from '../../components/ui/KeyboardScroll'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, PlusOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
@@ -155,7 +155,7 @@ export default function GwaCalculatorScreen() {
     <Screen
       width={twoUp ? 'wide' : 'reading'}
       edges={['top', 'bottom']}
-      // Keyboard-aware on iOS: see the KeyboardAwareScrollView below.
+      // Keyboard-aware on iOS: see the KeyboardScroll below.
       scroll={false}
       header={
         <DetailTopBar
@@ -165,7 +165,7 @@ export default function GwaCalculatorScreen() {
         />
       }
     >
-      <KeyboardAwareScrollView
+      <KeyboardScroll
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: spacing.xxxl }}
         showsVerticalScrollIndicator={false}
@@ -183,7 +183,7 @@ export default function GwaCalculatorScreen() {
         // Phones: the live result sits above the rows it summarises.
         <View style={{ gap: spacing.xl }}>{summary}{form}</View>
       )}
-      </KeyboardAwareScrollView>
+      </KeyboardScroll>
     </Screen>
   )
 }

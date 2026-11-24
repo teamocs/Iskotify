@@ -297,7 +297,7 @@ export default function ListingDetailScreen() {
         title={listing.title}
         subtitle={[listing.provider, listing.region].filter(Boolean).join(' · ') || undefined}
       />
-      {listing.status && listing.status !== 'active' ? (
+      {listing.status && listing.status !== 'active' && !(listing.status === 'upcoming' && daysLeft != null && daysLeft < 0) ? (
         <Badge label={listing.status.charAt(0).toUpperCase() + listing.status.slice(1)} tone="warning" />
       ) : null}
     </View>

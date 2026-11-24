@@ -549,7 +549,7 @@ describe('SignInScreen — Terms and Privacy Policy', () => {
 // diagnostic without an account. Native never shows it (native never routes
 // here, and has its own "start without an account" path on the landing screen).
 describe('SignInScreen — guest diagnostic (web only)', () => {
-  const GUEST_LABEL = 'Try a free diagnostic — no account needed'
+  const GUEST_LABEL = 'Try a free diagnostic'
   let restoreOS: { restore(): void } | null = null
   beforeEach(() => {
     // An earlier test swaps the params hook on the module; read mockParams again.

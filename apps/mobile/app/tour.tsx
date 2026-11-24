@@ -106,6 +106,7 @@ export default function TourScreen() {
   const indexRef = useRef(index)
   indexRef.current = index
   useEffect(() => {
+    if (Platform.OS === 'web') return
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (indexRef.current === 0) return false
       go(-1)

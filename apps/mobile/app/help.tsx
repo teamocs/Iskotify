@@ -29,7 +29,7 @@ const SECTIONS: { title: string; items: QA[] }[] = [
       },
       {
         q: 'Why aren\'t notifications showing up?',
-        a: 'Make sure notifications are allowed for Iskotify in your phone\'s settings, then turn on Push notifications in Iskotify\'s Settings.',
+        a: 'Reminders work in the phone app, not in a browser. On your phone, make sure notifications are allowed for Iskotify in your phone\'s settings, then turn on Push notifications in Iskotify\'s Settings.',
       },
     ],
   },

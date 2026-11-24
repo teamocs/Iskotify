@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { View, Text, TextInput, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardScroll } from '../../components/ui/KeyboardScroll'
 import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { getSettings, updateSettings } from '../../services/settings'
@@ -162,7 +162,7 @@ export default function ScholarshipInfoScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top']}>
       <DetailTopBar fallbackHref="/profile" />
 
-      <KeyboardAwareScrollView
+      <KeyboardScroll
         contentContainerStyle={{ paddingHorizontal: pagePadding(bp), paddingBottom: spacing.xxxl }}
         keyboardShouldPersistTaps="handled"
         bottomOffset={20}
@@ -330,7 +330,7 @@ export default function ScholarshipInfoScreen() {
           </>
         )}
         </View>
-      </KeyboardAwareScrollView>
+      </KeyboardScroll>
     </SafeAreaView>
   )
 }

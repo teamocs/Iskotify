@@ -490,6 +490,7 @@ export default function OnboardingScreen() {
   const backTargetRef = useRef(backTarget)
   backTargetRef.current = backTarget
   useEffect(() => {
+    if (Platform.OS === 'web') return
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       const to = backTargetRef.current
       if (!to) return false
