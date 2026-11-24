@@ -1,7 +1,7 @@
 // What a RevenueCat webhook event means for Full Access, as pure decisions. The
 // grant/revoke rules themselves (play never overrides web/grandfather/admin,
 // only 'play' is ever revoked) are enforced atomically in SQL by migration 067's
-// grant_entitlement / revoke_play_entitlement. No I/O here.
+// grant_entitlement and 075's apply_play_event. No I/O here.
 
 export type EntitlementSource = 'play' | 'web' | 'grandfather' | 'admin'
 
