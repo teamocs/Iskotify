@@ -21,6 +21,7 @@ const OPERATOR_ENDPOINTS = [
 const BEARER_ENDPOINTS = [
   '/api/account/delete',     // account deletion
   '/api/payments/checkout',  // web purchase (PayMongo Checkout)
+  '/api/payments/mock',      // test checkout (admin accounts only, checked in the route)
 ]
 
 // Payment-provider webhooks: no session, authenticated inside the route

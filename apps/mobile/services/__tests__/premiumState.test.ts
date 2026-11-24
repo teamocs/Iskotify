@@ -9,7 +9,7 @@ import * as schema from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
 import type { DrizzleClient } from '../../db/client'
 import {
-  initPremium, refreshPremium, signOutPremium, pollPremium, confirmPurchase, getPremiumSnapshot, subscribePremium,
+  initPremium, refreshPremium, signOutPremium, pollPremium, confirmPurchase, getPremiumSnapshot, subscribePremium, whenPremiumReady,
   buyFullAccess, restoreFullAccessForUser, forgetPremiumState, _resetPremiumForTests,
 } from '../premiumState'
 import { readPremiumCache, writePremiumCache } from '../premiumCache'
@@ -339,5 +339,28 @@ describe('account switch (the cache belongs to one account)', () => {
     await old
     expect(getPremiumSnapshot().isPremium).toBe(false)
     expect((await readPremiumCache(db)).premium).toBe(false)
+  })
+})
+
+describe('whenPremiumReady', () => {
+  it('a student with no cached access stays loading until the server row is in', async () => {
+    let answer!: (v: boolean) => void
+    mockRow.mockImplementationOnce(() => new Promise(r => { answer = r }))
+    const init = initPremium(makeDb())
+    const ready = jest.fn()
+    void whenPremiumReady().then(ready)
+    await new Promise(r => setTimeout(r, 20))
+    expect(getPremiumSnapshot().loading).toBe(true)
+    expect(ready).not.toHaveBeenCalled()
+    answer(true)
+    await init
+    expect(ready).toHaveBeenCalled()
+    expect(getPremiumSnapshot()).toMatchObject({ isPremium: true, loading: false })
+  })
+
+  it('gives up after the timeout', async () => {
+    expect(getPremiumSnapshot().loading).toBe(true)
+    await whenPremiumReady(10)
+    expect(getPremiumSnapshot().loading).toBe(true)
   })
 })

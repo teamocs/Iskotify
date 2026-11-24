@@ -45,16 +45,31 @@ afterEach(() => {
 })
 
 describe('POST /api/payments/checkout: the server flag', () => {
-  it('503 payments_disabled unless PAYMENTS_ENABLED is exactly "true", before anything else', async () => {
+  it('503 payments_disabled for students unless PAYMENTS_ENABLED is exactly "true"', async () => {
     for (const v of ['', 'false', 'TRUE', '1']) {
       vi.stubEnv('PAYMENTS_ENABLED', v)
       const res = await POST(req())
       expect(res.status, v).toBe(503)
       expect(await res.json()).toEqual({ error: 'payments_disabled' })
     }
-    expect(mockCheckRate).not.toHaveBeenCalled()
-    expect(db.client.auth.getUser).not.toHaveBeenCalled()
+    expect((await POST(req({}))).status).toBe(503)
+    expect((await POST(req({ authorization: 'Bearer bad' }))).status).toBe(503)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('while off, an admin account gets the test checkout page (no gateway key needed)', async () => {
+    vi.stubEnv('PAYMENTS_ENABLED', '')
+    vi.stubEnv('PAYMONGO_SECRET_KEY', '')
+    db.roles.set(UID, 'admin')
+    const res = await POST(req())
+    expect(res.status).toBe(200)
+    expect((await res.json()).checkoutUrl).toMatch(/^https:\/\/app\.iskotify\.ph\/mock-checkout\?reference=ISK-MOCK-/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('once on, an admin account gets the real checkout', async () => {
+    db.roles.set(UID, 'admin')
+    expect((await (await POST(req())).json()).checkoutUrl).toBe('https://checkout.paymongo.com/cs_1')
   })
 })
 

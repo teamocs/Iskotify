@@ -550,10 +550,10 @@ export default function ProfileScreen() {
       <View style={{ gap: spacing.md }}>
         {identity}
 
-        {/* Sign-in entry — only for users who skipped auth at startup (no googleId).
+        {/* Sign-in entry — only for users who skipped auth at startup.
             Routes to the EXISTING auth flow; no duplicated OAuth code. The
             screen's one primary action. */}
-        {status === 'ready' && !profile.googleId ? (
+        {status === 'ready' && !signedIn ? (
           <Card>
             <Text role="headline">Back up your progress</Text>
             <Text role="footnote" color={t.textSecondary} style={{ marginTop: spacing.xs, marginBottom: spacing.md }}>
@@ -641,7 +641,7 @@ export default function ProfileScreen() {
         {premium.enabled ? (
           <InsetRow
             title="Iskotify Full Access"
-            subtitle={premium.isPremium ? 'Unlimited practice and full mocks' : 'Unlimited practice, full mocks and answer reasons. One-time payment'}
+            subtitle={premium.isPremium ? 'Unlimited practice and full mocks' : 'Unlimited practice and full mocks. One-time payment'}
             icon={Crown3Outlined}
             iconTone={premium.isPremium ? 'success' : 'accent'}
             trailing={premium.isPremium ? <Badge label="Active" tone="success" /> : undefined}

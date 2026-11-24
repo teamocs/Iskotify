@@ -147,6 +147,13 @@ the Play testing track. Old OTA updates cannot reach the new build (runtime
 version follows the app version), and the new code cannot reach old builds.
 
 ### F. Test before opening to everyone
+
+**Mock payments (no gateway needed).** While `PAYMENTS_ENABLED` is not `true`, an account with
+`profiles.role = 'admin'` gets a test checkout page instead of a gateway. On the web app, sign in as
+that account and open `/upgrade?preview=on`: the limits apply in that browser only. Pay, cancel or
+return unconfirmed on the test page; "Remove test purchase" undoes it. Test events are
+`payment_events.provider = 'mock'`. `/upgrade?preview=off` ends it. Students keep getting 503.
+
 1. Sandbox Play purchase with a license tester (temporarily `REVENUECAT_ALLOW_SANDBOX=true`):
    buy → "Confirming" → Full Access active. Check the row:
    `select * from public.entitlements where user_id = '<uid>';`

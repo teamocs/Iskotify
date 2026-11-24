@@ -20,7 +20,7 @@ const call = (path: string, method = 'POST') =>
   middleware(new NextRequest(`https://iskotify.vercel.app${path}`, { method }))
 
 describe('middleware and /api/payments/*', () => {
-  for (const path of ['/api/payments/checkout', '/api/payments/paymongo/webhook', '/api/payments/revenuecat/webhook']) {
+  for (const path of ['/api/payments/checkout', '/api/payments/mock', '/api/payments/paymongo/webhook', '/api/payments/revenuecat/webhook']) {
     it(`lets ${path} through without an admin session`, async () => {
       const res = await call(path)
       expect(res.headers.get('location')).toBeNull()
@@ -40,6 +40,7 @@ describe('middleware and /api/payments/*', () => {
       '/api/payments/paymongo/webhook/replay',
       '/api/payments/paymongo/webhooks',
       '/api/payments/revenuecat/webhook-x',
+      '/api/payments/mock/x',
       '/api/payments/refund',
     ]) {
       const res = await call(path)

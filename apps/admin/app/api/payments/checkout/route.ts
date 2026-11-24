@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { randomBytes } from 'crypto'
 import { createServerClient } from '@iskotify/utils'
 import { checkAndIncrementRate } from '@/lib/redis/rateLimiter'
 import { buildCheckoutSessionBody } from '@/lib/payments/paymongo'
+import { isMockTester, newMockReference, paymentsEnabled } from '@/lib/payments/mock'
+import { bearerToken, clientIp, json, preflight, webAppUrl } from '@/lib/payments/studentRequest'
 
 export const runtime = 'nodejs'
 
@@ -14,22 +16,11 @@ export const runtime = 'nodejs'
 // used; nothing in the body is read. That id rides in the session metadata and
 // the PayMongo webhook grants it (migration 067's public.entitlements).
 //
-// Behind PAYMENTS_ENABLED: anything but 'true' answers 503 payments_disabled.
+// Behind PAYMENTS_ENABLED: anything but 'true' answers 503 payments_disabled, except
+// for an admin account, which gets the test checkout page (lib/payments/mock.ts).
 // Responses: 200 {checkoutUrl} | 401 not_signed_in | 409 already_premium |
 //            429 rate_limited | 500 not_configured / lookup_failed |
 //            502 checkout_failed | 503 payments_disabled
-
-const NO_STORE = { 'Cache-Control': 'no-store' }
-
-// The web app calls this cross-origin (app.iskotify.ph -> the admin host), and
-// the Authorization header forces a preflight. Native requests send no Origin.
-// The Expo web dev server is allowed only outside production.
-const PROD_ORIGIN = 'https://app.iskotify.ph'
-const DEV_ORIGIN = 'http://localhost:8081'
-
-function isAllowedOrigin(origin: string): boolean {
-  return origin === PROD_ORIGIN || (origin === DEV_ORIGIN && process.env.NODE_ENV !== 'production')
-}
 
 // A student opens checkout a handful of times at most. Per IP, generous for a
 // school network or carrier NAT; every call still needs a valid token.
@@ -38,35 +29,11 @@ const RATE_WINDOW_SEC = 60 * 60
 
 const PAYMONGO_CHECKOUT_URL = 'https://api.paymongo.com/v1/checkout_sessions'
 
-function corsHeaders(req: NextRequest): Record<string, string> {
-  const origin = req.headers.get('origin')
-  if (!origin || !isAllowedOrigin(origin)) return {}
-  return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' }
-}
-
-function json(req: NextRequest, body: unknown, status = 200, extra: Record<string, string> = {}) {
-  return NextResponse.json(body, { status, headers: { ...NO_STORE, ...corsHeaders(req), ...extra } })
-}
-
-function clientIp(req: NextRequest): string {
-  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-}
-
 export async function OPTIONS(req: NextRequest) {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      ...corsHeaders(req),
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Max-Age': '86400',
-    },
-  })
+  return preflight(req)
 }
 
 export async function POST(req: NextRequest) {
-  if (process.env.PAYMENTS_ENABLED !== 'true') return json(req, { error: 'payments_disabled' }, 503)
-
   const rate = await checkAndIncrementRate(`payments-checkout:${clientIp(req)}`, {
     max: RATE_MAX,
     windowSec: RATE_WINDOW_SEC,
@@ -77,14 +44,15 @@ export async function POST(req: NextRequest) {
       : {})
   }
 
-  const match = /^Bearer\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')
-  if (!match) return json(req, { error: 'not_signed_in' }, 401)
-  const token = match[1]!
+  const mock = !paymentsEnabled()
+  const notSignedIn = () => (mock ? json(req, { error: 'payments_disabled' }, 503) : json(req, { error: 'not_signed_in' }, 401))
+  const token = bearerToken(req)
+  if (!token) return notSignedIn()
 
   const secretKey = process.env.PAYMONGO_SECRET_KEY
   let supabase: ReturnType<typeof createServerClient>
   try {
-    if (!secretKey) throw new Error('PAYMONGO_SECRET_KEY is not set')
+    if (!mock && !secretKey) throw new Error('PAYMONGO_SECRET_KEY is not set')
     supabase = createServerClient()
   } catch (err) {
     console.error('[payments/checkout] not configured:', err)
@@ -93,7 +61,15 @@ export async function POST(req: NextRequest) {
 
   const { data: auth, error: authError } = await supabase.auth.getUser(token)
   const uid = auth?.user?.id
-  if (authError || !uid) return json(req, { error: 'not_signed_in' }, 401)
+  if (authError || !uid) return notSignedIn()
+  if (mock) {
+    try {
+      if (!(await isMockTester(supabase, uid))) return json(req, { error: 'payments_disabled' }, 503)
+    } catch (err) {
+      console.error('[payments/checkout] tester lookup failed:', err)
+      return json(req, { error: 'payments_disabled' }, 503)
+    }
+  }
 
   const { data: ent, error: entError } = await supabase
     .from('entitlements')
@@ -106,9 +82,11 @@ export async function POST(req: NextRequest) {
   }
   if ((ent as { premium?: boolean } | null)?.premium) return json(req, { error: 'already_premium' }, 409)
 
+  if (mock) return json(req, { checkoutUrl: `${webAppUrl()}/mock-checkout?reference=${newMockReference()}` })
+
   const body = buildCheckoutSessionBody({
     userId: uid,
-    webAppUrl: process.env.WEB_APP_URL || 'https://app.iskotify.ph',
+    webAppUrl: webAppUrl(),
     referenceNumber: `ISK-${Date.now().toString(36)}-${randomBytes(6).toString('hex')}`,
   })
 

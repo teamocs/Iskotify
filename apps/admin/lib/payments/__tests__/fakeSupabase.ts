@@ -7,6 +7,7 @@ export type FakeRow = Record<string, unknown>
 export function fakeSupabase() {
   const entitlements = new Map<string, FakeRow>()
   const events = new Map<string, FakeRow>()
+  const roles = new Map<string, string>()
   const users = new Set<string>()
   const fail = { insertEvent: false, rpc: false, select: false, getUserById: false, markProcessed: false }
   const tokens = new Map<string, string>()
@@ -72,22 +73,33 @@ export function fakeSupabase() {
       }),
       select: vi.fn(() => ({
         eq: vi.fn((_col: string, val: string) => ({
+          neq: vi.fn(async (_c: string, provider: string) => ({
+            count: [...events.values()].filter(e => e.user_id === val && e.provider !== provider).length, error: null,
+          })),
           maybeSingle: vi.fn(async () => {
             if (fail.select) return { data: null, error: { message: 'db down' } }
+            if (table === 'profiles') return { data: roles.has(val) ? { role: roles.get(val) } : null, error: null }
             const rows = table === 'entitlements' ? entitlements : events
             return { data: rows.get(val) ?? null, error: null }
           }),
         })),
       })),
       update: vi.fn((patch: FakeRow) => ({
-        eq: vi.fn(async (_col: string, val: string) => {
-          if (fail.markProcessed) return { error: { message: 'db down' } }
-          if (table === 'payment_events') events.set(val, { ...events.get(val), ...patch })
-          return { error: null }
+        eq: vi.fn((_col: string, val: string) => {
+          if (table === 'entitlements') {
+            return { eq: vi.fn(async (_c: string, source: string) => {
+              const e = entitlements.get(val)
+              if (e?.source === source) entitlements.set(val, { ...e, ...patch })
+              return { error: null }
+            }) }
+          }
+          if (fail.markProcessed) return Promise.resolve({ error: { message: 'db down' } })
+          events.set(val, { ...events.get(val), ...patch })
+          return Promise.resolve({ error: null })
         }),
       })),
     })),
   }
 
-  return { client, entitlements, events, users, fail, tokens }
+  return { client, entitlements, events, users, roles, fail, tokens }
 }

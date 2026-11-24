@@ -2,7 +2,8 @@
 import { practiceAllowanceNow, fullMockAllowedNow } from '../premiumGate'
 
 const mockSnap = { enabled: true, isPremium: false, unlimited: false, loading: false }
-jest.mock('../premiumState', () => ({ getPremiumSnapshot: () => mockSnap }))
+const mockReady = jest.fn(async () => undefined)
+jest.mock('../premiumState', () => ({ getPremiumSnapshot: () => mockSnap, whenPremiumReady: () => mockReady() }))
 
 const mockCount = jest.fn()
 const mockMocks = jest.fn()
@@ -80,4 +81,15 @@ describe('fullMockAllowedNow', () => {
     expect(await fullMockAllowedNow(db, 'upcat')).toBe(true)
     expect(mockMocks).not.toHaveBeenCalled()
   })
+})
+
+it('waits for the first premium answer instead of handing out unlimited access', async () => {
+  mockSnap.loading = true
+  mockCount.mockResolvedValue(30)
+  mockMocks.mockResolvedValue(1)
+  mockReady.mockImplementationOnce(async () => { mockSnap.loading = false })
+  expect(await practiceAllowanceNow(db)).toBe(0)
+  mockSnap.loading = true
+  mockReady.mockImplementationOnce(async () => { mockSnap.loading = false })
+  expect(await fullMockAllowedNow(db, 'upcat')).toBe(false)
 })

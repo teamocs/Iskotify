@@ -1,14 +1,15 @@
 import type { DrizzleClient } from '../db/client'
 import { canStartFullMock, practiceAllowance } from '../utils/premiumLimits'
-import { getPremiumSnapshot } from './premiumState'
+import { getPremiumSnapshot, whenPremiumReady } from './premiumState'
 import { countFullMocks, countPracticeAnswersToday, countPracticeHeld, hasHeldFullMock } from './premiumUsage'
 
-// What a practice runner asks right before it starts a run. Fail-open on
-// purpose: while the premium state is still loading, or if counting fails, a
-// student is never blocked (a paying one must never be locked out by a glitch).
+// What a practice runner asks right before it starts a run. Waits a few seconds for
+// the premium state; then fail-open on purpose: if it is still loading, or if counting
+// fails, a student is never blocked (a paying one must never be locked out by a glitch).
 
 /** Practice questions this run (`runKey`) may serve: Infinity when no limit applies. */
 export async function practiceAllowanceNow(db: DrizzleClient, runKey = ''): Promise<number> {
+  await whenPremiumReady()
   const s = getPremiumSnapshot()
   if (s.unlimited || s.loading) return Infinity
   try {
@@ -21,6 +22,7 @@ export async function practiceAllowanceNow(db: DrizzleClient, runKey = ''): Prom
 
 /** May a new FULL mock start for this exam? (Study Sprint is never gated.) */
 export async function fullMockAllowedNow(db: DrizzleClient, listingSlug: string, runKey = ''): Promise<boolean> {
+  await whenPremiumReady()
   const s = getPremiumSnapshot()
   if (s.unlimited || s.loading) return true
   try {

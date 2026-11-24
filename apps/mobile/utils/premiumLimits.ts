@@ -10,6 +10,7 @@
 // once >=90% of questions carry checked ones.)
 
 import { DAY_MS, localDayIndex } from './localDay'
+import { isPaywallPreview } from './paywallPreview'
 
 export const FREE_DAILY_PRACTICE_QUESTIONS = 30
 export const FREE_FULL_MOCKS_PER_EXAM = 1
@@ -20,10 +21,11 @@ export const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
 /**
  * The paywall flag. Off (anything but '1') means the app behaves exactly as it
  * did before Full Access existed: no limits and no upgrade UI anywhere. Read at
- * call time; the full `process.env.EXPO_PUBLIC_…` expression is what Expo inlines.
+ * call time (a staff browser may preview it, utils/paywallPreview.ts); the full
+ * `process.env.EXPO_PUBLIC_…` expression is what Expo inlines.
  */
 export function isPaywallEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_PAYWALL_ENABLED === '1'
+  return process.env.EXPO_PUBLIC_PAYWALL_ENABLED === '1' || isPaywallPreview()
 }
 
 /** Start (inclusive) and end (exclusive) epoch ms of the Manila calendar day holding `now`. */
