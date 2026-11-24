@@ -35,6 +35,7 @@ import { ExploreGrid, GridSkeleton, StaticGrid } from '../../components/explore/
 import {
   dateUrgency, matchBadge, practiceScoreBadge, fmtShortDate, truncateQuery, officialSourceLine, pickFeatured, SECTION_SEARCH,
   type BadgeSpec,
+  daysUntilDate,
 } from '../../components/explore/exploreModel'
 import { parseExploreSection, type ExploreSection } from '../../components/navigation/destinations'
 import { usesSystemTabBar } from '../../components/navigation/systemTabBar'
@@ -105,10 +106,15 @@ function toMatchInput(l: ListingRow): MatchInput {
   }
 }
 
+/** The next exam first, then dates to be announced, then exams already held (latest first). */
 function byExamDate(a: ListingRow, b: ListingRow): number {
-  if (!a.examDate) return 1
-  if (!b.examDate) return -1
-  return a.examDate - b.examDate
+  const rank = (l: ListingRow) => {
+    const left = daysUntilDate(l.examDate)
+    return left == null ? 1 : left >= 0 ? 0 : 2
+  }
+  const r = rank(a)
+  if (r !== rank(b)) return r - rank(b)
+  return r === 2 ? (b.examDate ?? 0) - (a.examDate ?? 0) : (a.examDate ?? 0) - (b.examDate ?? 0)
 }
 
 // ── Module-scope statics ──────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export -p web",
+  "buildCommand": "npx expo export -p web && cp dist/+not-found.html dist/404.html",
   "outputDirectory": "dist",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter @iskotify/mobile...",
   "framework": null,
@@ -25,6 +25,10 @@
     { "source": "/practice/:topicId", "destination": "/practice/[topicId].html" }
   ],
   "headers": [
+    {
+      "source": "/(_expo/static|assets)/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
     {
       "source": "/(.*)",
       "headers": [

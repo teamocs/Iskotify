@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, Text, Pressable, Switch } from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardScroll } from '../../components/ui/KeyboardScroll'
 import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { useTheme } from '../../theme/ThemeContext'
@@ -392,10 +392,10 @@ export default function EstimatorGradesScreen() {
 
   return (
     // Keyboard-aware on iOS: <Screen>'s own ScrollView can't lift the focused
-    // field above the keyboard, so the page scrolls in KeyboardAwareScrollView
+    // field above the keyboard, so the page scrolls in KeyboardScroll
     // (as app/profile/scholarship-info.tsx does) inside Screen's column.
     <Screen header={header} width={twoUp ? 'wide' : 'reading'} edges={['top', 'bottom']} scroll={false}>
-      <KeyboardAwareScrollView
+      <KeyboardScroll
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: spacing.xxxl }}
         showsVerticalScrollIndicator={false}
@@ -422,7 +422,7 @@ export default function EstimatorGradesScreen() {
           <WithdrawSensitiveButton onWithdrawn={onWithdrawn} />
         </View>
       ) : null}
-      </KeyboardAwareScrollView>
+      </KeyboardScroll>
     </Screen>
   )
 }

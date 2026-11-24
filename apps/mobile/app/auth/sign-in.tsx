@@ -375,7 +375,7 @@ export default function SignInScreen() {
             diagnostic before making an account. Web only. */}
         {Platform.OS === 'web' ? (
           <Button
-            label="Try a free diagnostic — no account needed"
+            label="Try a free diagnostic"
             variant="ghost"
             onPress={() => router.push(GUEST_INTRO_HREF)}
             disabled={loading}

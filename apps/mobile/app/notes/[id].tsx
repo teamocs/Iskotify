@@ -23,6 +23,7 @@ import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { parseChecklistItems, type NoteColor, type NoteType, type ChecklistItem } from '../../hooks/useNotes'
 import { notes as notesTable } from '../../db/schema'
+import { remindersSupported } from '../../utils/remindersSupported'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
 import { confirmAction } from '../../utils/confirmAction'
 import { Screen } from '../../components/ui/Screen'
@@ -513,13 +514,15 @@ export default function NoteEditorScreen() {
               })}
             </View>
             <View style={{ flexDirection: 'row' }}>
-              <ToolButton
-                label={hasActiveReminder ? 'Reminder, set' : 'Reminder'}
-                active={hasActiveReminder}
-                onPress={() => setShowReminderPicker(true)}
-              >
-                <Lineicons icon={hasActiveReminder ? Bell1Solid : Bell1Outlined} size={20} color={hasActiveReminder ? t.accentText : t.textPrimary} />
-              </ToolButton>
+              {remindersSupported ? (
+                <ToolButton
+                  label={hasActiveReminder ? 'Reminder, set' : 'Reminder'}
+                  active={hasActiveReminder}
+                  onPress={() => setShowReminderPicker(true)}
+                >
+                  <Lineicons icon={hasActiveReminder ? Bell1Solid : Bell1Outlined} size={20} color={hasActiveReminder ? t.accentText : t.textPrimary} />
+                </ToolButton>
+              ) : null}
               <ToolButton
                 label={assignedIds.length > 0 ? `Labels, ${assignedIds.length} assigned` : 'Labels'}
                 active={assignedIds.length > 0}

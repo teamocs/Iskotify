@@ -15,6 +15,7 @@ import { schoolSheetOptions } from '../components/schools/schoolSheet'
 import { syncOnLaunch } from '../services/sync'
 import { pullUserData } from '../services/sync'
 import { installPushFlushListeners } from '../services/pushFlushListeners'
+import { WebHead } from '../components/WebHead'
 import { WebSetupOverlay } from '../components/WebSetupOverlay'
 import { markFirstSyncDone } from '../services/syncStatus'
 import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
@@ -68,6 +69,7 @@ export default function RootLayout() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardProviderCompat>
+          <WebHead />
           <DrizzleProvider>
             <ThemeProvider>
               <AppInit onReady={handleReady} ready={appReady} />

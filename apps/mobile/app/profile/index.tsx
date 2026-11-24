@@ -65,6 +65,7 @@ import { layout, motion, radius, spacing } from '../../theme/tokens'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch, pushBeforeSignOut } from '../../services/sync'
 import { usePremium } from '../../hooks/usePremium'
+import { remindersSupported } from '../../utils/remindersSupported'
 import { signOutPremium } from '../../services/premiumState'
 
 interface ProfileData {
@@ -606,14 +607,16 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        <InsetGroup header="Study" headerLevel={2} inset={false} footer="A daily practice nudge, plus exam countdowns.">
-          <InsetRow
-            title="Study reminders"
-            subtitle={remindersOn ? `Daily at ${formatHour(dailyReminderHour)}` : 'Off'}
-            icon={Bell1Outlined}
-            switchValue={remindersOn}
-            onSwitchChange={() => void toggleReminders(reminderListings)}
-          />
+        <InsetGroup header="Study" headerLevel={2} inset={false} footer={remindersSupported ? 'A daily practice nudge, plus exam countdowns.' : undefined}>
+          {remindersSupported ? (
+            <InsetRow
+              title="Study reminders"
+              subtitle={remindersOn ? `Daily at ${formatHour(dailyReminderHour)}` : 'Off'}
+              icon={Bell1Outlined}
+              switchValue={remindersOn}
+              onSwitchChange={() => void toggleReminders(reminderListings)}
+            />
+          ) : null}
           <InsetRow
             title="Progress and analytics"
             subtitle="Readiness, accuracy, pace and mistakes"
@@ -675,7 +678,7 @@ export default function ProfileScreen() {
       <InsetGroup inset={false} footer="Sign out keeps your progress on this device. Reset and delete cannot be undone.">
         <InsetRow
           title="Sign Out"
-          subtitle="Sign out of your Google account on this device"
+          subtitle="Sign out on this device"
           icon={ExitOutlined}
           iconTone="danger"
           destructive

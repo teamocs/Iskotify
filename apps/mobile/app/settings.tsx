@@ -21,6 +21,7 @@ import {
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
+import { remindersSupported } from '../utils/remindersSupported'
 import { useTheme } from '../theme/ThemeContext'
 import { layout, radius, spacing } from '../theme/tokens'
 import { InfoPage } from '../components/info/InfoPage'
@@ -196,44 +197,46 @@ export default function SettingsScreen() {
         />
       </InsetGroup>
 
-      <InsetGroup
-        header="Notifications"
-        headerLevel={2}
-        inset={false}
-        style={gap}
-        footer="Daily nudges, reminders and your weekly summary."
-      >
-        <InsetRow
-          title="Push notifications"
-          subtitle={notifEnabled ? 'On: daily nudge, weekly summary, exam countdowns' : 'Off'}
-          icon={Bell1Outlined}
-          switchValue={notifEnabled}
-          onSwitchChange={() => void toggleNotifs(focusedListings)}
-        />
-        <InsetRow
-          title="Daily reminder time"
-          subtitle="When your daily practice nudge arrives"
-          icon={Alarm1Outlined}
-          disabled={!notifEnabled}
-          trailing={(
-            <Stepper
-              label="Daily reminder time"
-              value={formatHour(dailyReminderHour)}
-              disabled={!notifEnabled}
-              onEarlier={() => void setReminderHour((dailyReminderHour + 23) % 24, focusedListings)}
-              onLater={() => void setReminderHour((dailyReminderHour + 1) % 24, focusedListings)}
-            />
-          )}
-        />
-        <InsetRow
-          title="Weekly summary"
-          subtitle="A Sunday nudge to review your weak areas"
-          icon={CalendarDaysOutlined}
-          switchValue={weeklySummaryEnabled}
-          onSwitchChange={() => void toggleWeeklySummary(focusedListings)}
-          disabled={!notifEnabled}
-        />
-      </InsetGroup>
+      {remindersSupported ? (
+        <InsetGroup
+          header="Notifications"
+          headerLevel={2}
+          inset={false}
+          style={gap}
+          footer="Daily nudges, reminders and your weekly summary."
+        >
+          <InsetRow
+            title="Push notifications"
+            subtitle={notifEnabled ? 'On: daily nudge, weekly summary, exam countdowns' : 'Off'}
+            icon={Bell1Outlined}
+            switchValue={notifEnabled}
+            onSwitchChange={() => void toggleNotifs(focusedListings)}
+          />
+          <InsetRow
+            title="Daily reminder time"
+            subtitle="When your daily practice nudge arrives"
+            icon={Alarm1Outlined}
+            disabled={!notifEnabled}
+            trailing={(
+              <Stepper
+                label="Daily reminder time"
+                value={formatHour(dailyReminderHour)}
+                disabled={!notifEnabled}
+                onEarlier={() => void setReminderHour((dailyReminderHour + 23) % 24, focusedListings)}
+                onLater={() => void setReminderHour((dailyReminderHour + 1) % 24, focusedListings)}
+              />
+            )}
+          />
+          <InsetRow
+            title="Weekly summary"
+            subtitle="A Sunday nudge to review your weak areas"
+            icon={CalendarDaysOutlined}
+            switchValue={weeklySummaryEnabled}
+            onSwitchChange={() => void toggleWeeklySummary(focusedListings)}
+            disabled={!notifEnabled}
+          />
+        </InsetGroup>
+      ) : null}
 
       <InsetGroup header="Privacy" headerLevel={2} inset={false} style={gap} footer="You choose what is shared.">
         <InsetRow

@@ -58,9 +58,10 @@ export function useFocusListings() {
         .from(focusListings)
         .leftJoin(listings, eq(listings.slug, focusListings.listingSlug))
         .orderBy(asc(focusListings.priority))
-      const mapped = rows.map(r => ({
+      // Shown as #1, #2…: a restored backup numbers them from 0 (services/sync.ts).
+      const mapped = rows.map((r, i) => ({
         slug: r.slug,
-        priority: r.priority,
+        priority: i + 1,
         addedAt: r.addedAt,
         title: r.title ?? r.slug,
         type: r.type ?? 'exam',

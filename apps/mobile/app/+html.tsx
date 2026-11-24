@@ -14,6 +14,7 @@
  */
 import { ScrollViewStyleReset } from 'expo-router/html'
 import type { PropsWithChildren } from 'react'
+import { WEB_DESCRIPTION } from '../utils/webTitle'
 
 export default function Root({ children }: PropsWithChildren) {
   return (
@@ -23,6 +24,15 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         {/* One (light) palette: tint the mobile browser chrome to the page ground. */}
         <meta name="theme-color" content="#fdf4f4" />
+        <meta name="description" content={WEB_DESCRIPTION} />
+        <meta property="og:description" content={WEB_DESCRIPTION} />
+        <meta property="og:site_name" content="Iskotify" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://app.iskotify.ph/icon.png" />
+        {/* Add to Home Screen: the app opens on its own, without the browser bar. */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon.png" />
+        <meta name="apple-mobile-web-app-title" content="Iskotify" />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
