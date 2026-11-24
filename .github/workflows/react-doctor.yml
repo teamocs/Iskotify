@@ -42,6 +42,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # React Doctor needs the merge base to report only what a PR introduces.
+          fetch-depth: 0
 
       - uses: millionco/react-doctor@v2
         # Report-only until the optimisation phase clears the existing findings
