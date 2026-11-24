@@ -672,7 +672,7 @@ describe('UpcatExam', () => {
       mockQuestionRows = [q(1), q(2)]
       mockGate.allowance = 0
       render(<UpcatExam />)
-      expect(await screen.findByText("You've done your 30 free questions today. Come back tomorrow, or unlock unlimited practice.")).toBeTruthy()
+      expect(await screen.findByText("Your 30 free questions for today are used or held in an unfinished run. Finish that run, come back tomorrow, or unlock unlimited practice.")).toBeTruthy()
       expect(screen.queryByText('1+1?')).toBeNull()
       fireEvent.press(screen.getByRole('button', { name: 'Unlock Full Access' }))
       expect(mockPush).toHaveBeenCalledWith('/upgrade?from=practice_cap')
@@ -683,12 +683,12 @@ describe('UpcatExam', () => {
       mockQuestionRows = [q(1), q(2)]
       mockGate.allowance = 0
       const { rerender } = render(<UpcatExam />)
-      expect(await screen.findByText(/free questions today/)).toBeTruthy()
+      expect(await screen.findByText(/free questions for today/)).toBeTruthy()
       mockGate.allowance = Infinity
       Object.assign(mockPremium, { isPremium: true, unlimited: true })
       await act(async () => { rerender(<UpcatExam />) })
       await waitFor(() => expect(screen.getByText(/Question 1 of 2/)).toBeTruthy())
-      expect(screen.queryByText(/free questions today/)).toBeNull()
+      expect(screen.queryByText(/free questions for today/)).toBeNull()
     })
 
     it('never cuts a reading passage set in half at the daily cap', async () => {
@@ -717,7 +717,7 @@ describe('UpcatExam', () => {
       mockGate.allowance = 0
       mockGate.fullMockAllowed = false
       render(<UpcatExam />)
-      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
+      expect(await screen.findByText(/used or still in progress/i)).toBeTruthy()
     })
 
     it('a saved run can always be resumed', async () => {

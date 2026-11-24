@@ -13,10 +13,10 @@ import { FREE_DAILY_PRACTICE_QUESTIONS } from '../../utils/premiumLimits'
 // (the callers' gates already guarantee it): with the flag off no upgrade UI exists.
 
 export const PRACTICE_CAP_BODY =
-  `You've done your ${FREE_DAILY_PRACTICE_QUESTIONS} free questions today. Come back tomorrow, or unlock unlimited practice.`
+  `Your ${FREE_DAILY_PRACTICE_QUESTIONS} free questions for today are used or held in an unfinished run. Finish that run, come back tomorrow, or unlock unlimited practice.`
 
 export const FULL_MOCK_CAP_BODY =
-  "You've used your free full mock for this exam. Study Sprint stays free, or unlock unlimited full mocks."
+  "Your free full mock for this exam is used or still in progress. Study Sprint stays free, or unlock unlimited full mocks."
 
 const upgradeHref = (source: string) => `/upgrade?from=${encodeURIComponent(source)}` as Href
 

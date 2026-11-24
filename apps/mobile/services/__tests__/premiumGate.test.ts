@@ -6,9 +6,13 @@ jest.mock('../premiumState', () => ({ getPremiumSnapshot: () => mockSnap }))
 
 const mockCount = jest.fn()
 const mockMocks = jest.fn()
+const mockHeld = jest.fn()
+const mockHeldMock = jest.fn()
 jest.mock('../premiumUsage', () => ({
   countPracticeAnswersToday: (...a: unknown[]) => mockCount(...a),
   countFullMocks: (...a: unknown[]) => mockMocks(...a),
+  countPracticeHeld: (...a: unknown[]) => mockHeld(...a),
+  hasHeldFullMock: (...a: unknown[]) => mockHeldMock(...a),
 }))
 
 const db = { tag: 'db' } as never
@@ -17,6 +21,8 @@ beforeEach(() => {
   Object.assign(mockSnap, { enabled: true, isPremium: false, unlimited: false, loading: false })
   mockCount.mockReset().mockResolvedValue(0)
   mockMocks.mockReset().mockResolvedValue(0)
+  mockHeld.mockReset().mockResolvedValue(0)
+  mockHeldMock.mockReset().mockResolvedValue(false)
   jest.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
@@ -36,6 +42,15 @@ describe('practiceAllowanceNow', () => {
     expect(await practiceAllowanceNow(db)).toBe(0)
   })
 
+  it('free: unfinished runs hold part of the 30', async () => {
+    mockCount.mockResolvedValue(10)
+    mockHeld.mockResolvedValue(15)
+    expect(await practiceAllowanceNow(db, 'upcat:Math:quick')).toBe(5)
+    expect(mockHeld).toHaveBeenCalledWith(db, 'upcat:Math:quick')
+    mockHeld.mockResolvedValue(25)
+    expect(await practiceAllowanceNow(db, 'upcat:Math:quick')).toBe(0)
+  })
+
   it('never blocks while the premium state is still loading, or when counting fails', async () => {
     mockSnap.loading = true
     expect(await practiceAllowanceNow(db)).toBe(Infinity)
@@ -51,6 +66,12 @@ describe('fullMockAllowedNow', () => {
     mockMocks.mockResolvedValue(1)
     expect(await fullMockAllowedNow(db, 'upcat')).toBe(false)
     expect(mockMocks).toHaveBeenCalledWith(db, 'upcat')
+  })
+
+  it('free: another full mock still in progress is the one free mock', async () => {
+    mockHeldMock.mockResolvedValue(true)
+    expect(await fullMockAllowedNow(db, 'upcat', 'exam:upcat')).toBe(false)
+    expect(mockHeldMock).toHaveBeenCalledWith(db, 'upcat', 'exam:upcat')
   })
 
   it('flag off or Full Access: always allowed', async () => {

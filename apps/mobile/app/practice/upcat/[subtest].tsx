@@ -186,12 +186,12 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     // (Resume) is never gated: it already started.
     if (built.length > 0) {
       if (upcatDrillKind(subtestParam, mode) === 'mock') {
-        if (!(await fullMockAllowedNow(db, 'upcat'))) {
+        if (!(await fullMockAllowedNow(db, 'upcat', runKey))) {
           if (canStart()) { setCap('mock'); send('UNAVAILABLE') }
           return
         }
       } else {
-        const allowance = await practiceAllowanceNow(db)
+        const allowance = await practiceAllowanceNow(db, runKey)
         if (allowance <= 0) {
           if (canStart()) { setCap('practice'); send('UNAVAILABLE') }
           return
@@ -513,7 +513,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
       <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <View style={{ gap: spacing.md }}>
           {cap === 'mock' ? (
-            <UpgradeCard title="Your free full mock is done" body={FULL_MOCK_CAP_BODY} source="full_mock_cap" />
+            <UpgradeCard title="One free full mock per exam" body={FULL_MOCK_CAP_BODY} source="full_mock_cap" />
           ) : (
             <UpgradeCard title="That's today's free practice" body={PRACTICE_CAP_BODY} source="practice_cap" />
           )}

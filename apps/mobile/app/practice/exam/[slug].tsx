@@ -419,7 +419,7 @@ export default function BlueprintExam() {
   useEffect(() => {
     if (run.status !== 'prestart' || !slug) return
     let cancelled = false
-    void fullMockAllowedNow(db, slug).then(ok => { if (!cancelled) setFullMockLocked(!ok) })
+    void fullMockAllowedNow(db, slug, runKeyFor('exam', slug)).then(ok => { if (!cancelled) setFullMockLocked(!ok) })
     return () => { cancelled = true }
   }, [run.status, slug, db, premiumUnlimited, premiumLoading])
 
@@ -936,7 +936,7 @@ export default function BlueprintExam() {
               <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
             ) : null}
             {fullMockLocked ? (
-              <UpgradeCard title="Your free full mock is done" body={FULL_MOCK_CAP_BODY} source="full_mock_cap" />
+              <UpgradeCard title="One free full mock per exam" body={FULL_MOCK_CAP_BODY} source="full_mock_cap" />
             ) : (
               <Button
                 label="Full Mock"
