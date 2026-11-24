@@ -22,6 +22,7 @@ updates:
       - dependency-name: "expo-*"
       - dependency-name: "@expo/*"
       - dependency-name: "jest-expo"
+      - dependency-name: "eslint-config-expo"
       - dependency-name: "react-native"
       - dependency-name: "react-native-*"
       - dependency-name: "@react-native/*"

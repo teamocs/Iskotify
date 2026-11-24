@@ -160,7 +160,7 @@ export interface WebDatabaseHandle {
  */
 export async function openWebDatabase(
   store: ByteStore = makeIndexedDbStore(),
-  initSqlJs?: (cfg?: object) => Promise<SqlJsStatic>,
+  initSqlJs?: () => Promise<SqlJsStatic>,
 ): Promise<WebDatabaseHandle> {
   // Load sql.js — in node (jest) we use the standard require which auto-selects
   // the asm/wasm build appropriate for the environment.
