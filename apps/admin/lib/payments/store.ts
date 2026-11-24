@@ -17,18 +17,24 @@ export type PaymentEvent = {
   payload: Record<string, unknown>
 }
 
-/** Inserts the event; 'duplicate' when its id was already recorded (a replay). */
+/**
+ * Inserts the event. 'duplicate' only when its id was already recorded AND fully
+ * processed (migration 071): a retry of an event whose processing failed or died
+ * half-way must run again. Grants and revokes are idempotent, so that is safe.
+ */
 export async function recordEvent(db: Db, event: PaymentEvent): Promise<'recorded' | 'duplicate'> {
   const { error } = await db.from('payment_events').insert(event)
   if (!error) return 'recorded'
-  if (error.code === '23505') return 'duplicate'
-  throw new Error(`payment_events insert failed: ${error.message}`)
+  if (error.code !== '23505') throw new Error(`payment_events insert failed: ${error.message}`)
+  const { data, error: readError } = await db.from('payment_events').select('processed_at').eq('id', event.id).maybeSingle()
+  if (readError) throw new Error(`payment_events lookup failed: ${readError.message}`)
+  return data?.processed_at ? 'duplicate' : 'recorded'
 }
 
-/** Removes a recorded event after its processing failed, so the provider's retry is not a no-op. */
-export async function forgetEvent(db: Db, id: string): Promise<void> {
-  const { error } = await db.from('payment_events').delete().eq('id', id)
-  if (error) console.error('[payments] could not forget event', id, error.message)
+/** Marks an event fully processed, after its entitlement writes: later replays are no-ops. */
+export async function markProcessed(db: Db, id: string): Promise<void> {
+  const { error } = await db.from('payment_events').update({ processed_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw new Error(`payment_events update failed: ${error.message}`)
 }
 
 /** True when `id` is a uuid of an existing auth user. */

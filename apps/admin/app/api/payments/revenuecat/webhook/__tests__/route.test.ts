@@ -128,10 +128,10 @@ describe('POST /api/payments/revenuecat/webhook: purchases', () => {
     expect(db.events.get('rc-evt-1')).toMatchObject({ amount_centavos: null })
   })
 
-  it('a failed grant forgets the event so RevenueCat\'s retry can grant', async () => {
+  it('a failed grant leaves the event unprocessed so RevenueCat\'s retry can grant', async () => {
     db.fail.rpc = true
     expect((await POST(req(rcEvent()))).status).toBe(500)
-    expect(db.events.has('rc-evt-1')).toBe(false)
+    expect(db.events.get('rc-evt-1')!.processed_at).toBeNull()
     db.fail.rpc = false
     expect((await POST(req(rcEvent()))).status).toBe(200)
     expect(db.entitlements.get(UID)).toMatchObject({ premium: true })
@@ -279,11 +279,24 @@ describe('POST /api/payments/revenuecat/webhook: TRANSFER moves premium', () => 
     expect(db.entitlements.get(UID)).toMatchObject({ premium: false })
   })
 
-  it('a failed write forgets the event so the retry can finish the transfer', async () => {
+  it('grants on retry when the first attempt died between recording and granting', async () => {
+    db.events.set('rc-evt-1', { id: 'rc-evt-1', processed_at: null })
+    expect((await POST(req(rcEvent()))).status).toBe(200)
+    expect(db.entitlements.get(UID)).toMatchObject({ premium: true })
+  })
+
+  it('a replayed purchase after a refund does not grant again', async () => {
+    await POST(req(rcEvent()))
+    db.entitlements.set(UID, { ...db.entitlements.get(UID)!, premium: false })
+    expect(await (await POST(req(rcEvent()))).json()).toMatchObject({ duplicate: true })
+    expect(db.entitlements.get(UID)).toMatchObject({ premium: false })
+  })
+
+  it('a failed write leaves the event unprocessed so the retry can finish the transfer', async () => {
     db.entitlements.set(UID, playRow())
     db.fail.rpc = true
     expect((await POST(req(transfer()))).status).toBe(500)
-    expect(db.events.has('rc-tr-1')).toBe(false)
+    expect(db.events.get('rc-tr-1')!.processed_at).toBeNull()
     db.fail.rpc = false
     expect((await POST(req(transfer()))).status).toBe(200)
     expect(db.entitlements.get(UID2)).toMatchObject({ premium: true })

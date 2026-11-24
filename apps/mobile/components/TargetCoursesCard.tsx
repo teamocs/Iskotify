@@ -115,11 +115,6 @@ export function TargetCoursesCard() {
     } catch (e) {
       console.warn('[courses-card] persist:', e)
     }
-    void supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        void supabase.from('profiles').update({ target_courses: next.map(c => c.label) }).eq('id', data.user.id)
-      }
-    })
   }, [db])
 
   const toggle = useCallback((c: CourseOption) => {

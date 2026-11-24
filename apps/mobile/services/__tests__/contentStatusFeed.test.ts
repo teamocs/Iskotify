@@ -140,7 +140,7 @@ describe('syncOnLaunch + content status feed', () => {
 
   function setup() {
     const ctx = makeDb()
-    ctx.raw.prepare('INSERT INTO user_settings (id, selected_listing_slug, last_synced_at, sync_rev) VALUES (1, ?, ?, 2)')
+    ctx.raw.prepare('INSERT INTO user_settings (id, selected_listing_slug, last_synced_at, sync_rev) VALUES (1, ?, ?, 3)')
       .run('upcat', LAST_SYNCED)
     // Every catalog pull returns nothing: the feed is the only source of change.
     const empty = Promise.resolve({ data: [], error: null })

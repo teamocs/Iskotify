@@ -12,7 +12,7 @@ import type { RawUpcatQuestion } from '../../../../utils/upcatExam'
 // saveRun in the autosave effect's deps would write the run every second.
 
 jest.mock('expo-router', () => ({
-  router: { push: () => {}, replace: () => {}, back: () => {} },
+  router: { push: () => {}, replace: () => {}, back: () => {}, canGoBack: () => true },
   useLocalSearchParams: () => ({ slug: 'test-mock' }),
 }))
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: ({ children }: any) => children }))

@@ -14,7 +14,7 @@ const mockRouterBack = jest.fn()
 
 const mockRouterPush = jest.fn()
 jest.mock('expo-router', () => ({
-  router: { push: (...a: unknown[]) => mockRouterPush(...a), replace: () => {}, back: (...a: unknown[]) => mockRouterBack(...a) },
+  router: { push: (...a: unknown[]) => mockRouterPush(...a), replace: () => {}, back: (...a: unknown[]) => mockRouterBack(...a), canGoBack: () => true },
   useLocalSearchParams: () => mockSearchParams,
 }))
 

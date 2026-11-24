@@ -30,7 +30,7 @@ import { Button } from '../../../components/ui/Button'
 import { ResultsBreakdown } from '../../../components/practice/ResultsBreakdown'
 import { resultCounts } from '../../../components/practice/resultsCopy'
 import { isReached } from '../../../utils/examSubmit'
-import { DetailTopBar } from '../../../components/explore/DetailTopBar'
+import { DetailTopBar, goBackOr } from '../../../components/explore/DetailTopBar'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, iosTextStyle } from '../../../theme/tokens'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
@@ -401,18 +401,22 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
 
   // Fix 1: leave-confirmation while running. If the timer submitted while the dialog
   // was open, CONFIRM_LEAVE is refused and nothing guards leaving any more: just go.
-  usePreventLeave(running && !leaving, () => {
+  const confirmLeave = () => {
     confirmAction(
       'Leave the exam?',
       'Your progress is saved.',
       'Leave',
-      () => { if (!send('CONFIRM_LEAVE')) router.back() },
+      () => { if (!send('CONFIRM_LEAVE')) goBackOr(homeHref) },
       { cancelLabel: 'Stay', destructive: true },
     )
-  })
+  }
+  usePreventLeave(running && !leaving, confirmLeave)
   useEffect(() => {
-    if (leaving) router.back()
-  }, [leaving])
+    if (leaving) goBackOr(homeHref)
+  }, [leaving, homeHref])
+  // After a web reload or deep link there is no back entry, so router.back() never
+  // reaches the guard above: ask here.
+  const leave = () => { if (running && !router.canGoBack()) confirmLeave(); else goBackOr(homeHref) }
   // Review finding #3: web-only tab-close warning + immediate persist flush.
   useBeforeUnloadWarning(runActive)
 
@@ -721,7 +725,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
           total={questions.length}
           answered={answeredIdxs.size}
           remaining={remaining}
-          onLeave={() => router.back()}
+          onLeave={leave}
         />
       }
       question={

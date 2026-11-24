@@ -375,13 +375,6 @@ export default function OnboardingScreen() {
       }
     }
     flushWebPersist()
-    void supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        void supabase.from('profiles')
-          .update({ target_exams: selectedExams.map(e => e.examAcronym) })
-          .eq('id', data.user.id)
-      }
-    })
     // ALWAYS advance; sync content in the background.
     setSaving(false)
     go(nextStep('goals'))

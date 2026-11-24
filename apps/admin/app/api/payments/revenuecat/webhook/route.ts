@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { classifyRevenueCatEvent, minimalRevenueCatPayload, type RevenueCatDecision } from '@/lib/payments/entitlementRules'
 import { safeEqual } from '@/lib/payments/signature'
-import { forgetEvent, grantEntitlement, recordEvent, revokePlayEntitlement, userExists } from '@/lib/payments/store'
+import { markProcessed, grantEntitlement, recordEvent, revokePlayEntitlement, userExists } from '@/lib/payments/store'
 
 export const runtime = 'nodejs'
 
@@ -102,6 +102,12 @@ export async function POST(req: NextRequest) {
 
   if (decision.kind === 'ignore') {
     console.warn('[payments/revenuecat] ignored', type, eventId, decision.reason)
+    try {
+      await markProcessed(db, eventId)
+    } catch (err) {
+      console.error('[payments/revenuecat] could not mark event processed:', err)
+      return json({ error: 'server_error' }, 500)
+    }
     return json({ received: true, ignored: true })
   }
 
@@ -117,9 +123,9 @@ export async function POST(req: NextRequest) {
       for (const id of decision.grantTo) await grantEntitlement(db, id, 'play')
       console.info('[payments/revenuecat] TRANSFER', eventId, `revoked ${decision.revokeFrom.length}, granted ${decision.grantTo.length}`)
     }
+    await markProcessed(db, eventId)
   } catch (err) {
     console.error('[payments/revenuecat] entitlement write failed:', err)
-    await forgetEvent(db, eventId)
     return json({ error: 'server_error' }, 500)
   }
 

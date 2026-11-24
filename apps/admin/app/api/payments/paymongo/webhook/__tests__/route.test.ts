@@ -218,14 +218,35 @@ describe('POST /api/payments/paymongo/webhook: checkout_session.payment.paid', (
     expect(db.entitlements.size).toBe(0)
   })
 
-  it('a failed grant forgets the event so the retry can grant', async () => {
+  it('a failed grant leaves the event unprocessed so the retry can grant', async () => {
     db.fail.rpc = true
     expect((await POST(signed(event()))).status).toBe(500)
-    expect(db.events.has('evt_1')).toBe(false)
+    expect(db.events.get('evt_1')!.processed_at).toBeNull()
 
     db.fail.rpc = false
     expect((await POST(signed(event()))).status).toBe(200)
     expect(db.entitlements.get(UID)).toMatchObject({ premium: true, source: 'web' })
+  })
+
+  it('grants on retry when the first attempt died between recording and granting', async () => {
+    db.events.set('evt_1', { id: 'evt_1', processed_at: null })
+    expect((await POST(signed(event()))).status).toBe(200)
+    expect(db.entitlements.get(UID)).toMatchObject({ premium: true, source: 'web' })
+    expect(db.events.get('evt_1')!.processed_at).toEqual(expect.any(String))
+  })
+
+  it('500 when the event cannot be marked processed, and the retry completes it', async () => {
+    db.fail.markProcessed = true
+    expect((await POST(signed(event()))).status).toBe(500)
+    db.fail.markProcessed = false
+    expect((await POST(signed(event()))).status).toBe(200)
+    expect(db.entitlements.get(UID)).toMatchObject({ premium: true })
+  })
+
+  it('500 when a duplicate cannot be looked up (never assumed processed)', async () => {
+    db.events.set('evt_1', { id: 'evt_1', processed_at: null })
+    db.fail.select = true
+    expect((await POST(signed(event()))).status).toBe(500)
   })
 
   it('a web purchase is never downgraded and replaces a Play grant as source', async () => {
@@ -252,7 +273,7 @@ describe('POST /api/payments/paymongo/webhook: checkout_session.payment.paid', (
         const res = await POST(signed(body, { livemode: body.data.attributes.livemode }))
         expect(res.status).toBe(200)
         expect(await res.json()).toMatchObject({ granted: false })
-        expect(db.events.has('evt_1')).toBe(true)
+        expect(db.events.get('evt_1')!.payload).toMatchObject({ review_reason: expect.any(String) })
         expect(db.entitlements.size).toBe(0)
         expect(db.client.rpc).not.toHaveBeenCalled()
         expect(fetchMock).not.toHaveBeenCalled()

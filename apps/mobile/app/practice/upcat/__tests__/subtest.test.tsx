@@ -10,6 +10,7 @@ import UpcatExam from '../[subtest]'
 const mockPush = jest.fn()
 const mockReplace = jest.fn()
 const mockRouterBack = jest.fn()
+let mockCanGoBack = true
 let mockSearchParams: { subtest?: string; mode?: string } = {}
 
 jest.mock('expo-router', () => ({
@@ -17,6 +18,7 @@ jest.mock('expo-router', () => ({
     push: (...a: unknown[]) => mockPush(...a),
     replace: (...a: unknown[]) => mockReplace(...a),
     back: (...a: unknown[]) => mockRouterBack(...a),
+    canGoBack: () => mockCanGoBack,
   },
   useLocalSearchParams: () => mockSearchParams,
 }))
@@ -140,6 +142,7 @@ describe('UpcatExam', () => {
     mockPush.mockReset()
     mockReplace.mockReset()
     mockRouterBack.mockClear()
+    mockCanGoBack = true
     mockRecordSession.mockClear()
     mockRecordAttempts.mockClear()
     mockUsePreventLeave.mockClear()
@@ -546,6 +549,7 @@ describe('UpcatExam', () => {
     })
 
     it('says so on a page with one way back when the subtest has no questions', async () => {
+      mockCanGoBack = false
       mockSearchParams = { subtest: 'Mathematics' }
       mockQuestionRows = []
       render(<UpcatExam />)
@@ -781,6 +785,131 @@ describe('UpcatExam', () => {
       await waitFor(() => expect(screen.getByText('Practice complete.')).toBeTruthy())
       expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
     })
+  })
+
+  // ── A saved run whose time ran out, and the sitting's start time ──────────
+  describe('stale runs and startedAt', () => {
+    const mk = (id: string, subtest: string, correctIndex = 1) => ({
+      questionId: id, subtest, questionText: `${id}?`, options: JSON.stringify(['1', '2', '3', '4']),
+      correctIndex, explanation: '', setId: null, setPosition: null, topic: null,
+    })
+    const saved = (over: object = {}) => ({
+      runKey: 'upcat:all:full', kind: 'upcat', slug: 'all', mode: 'full',
+      questionIds: ['M1', 'M2', 'S1', 'S2'], sectionNames: ['Mathematics', 'Mathematics', 'Science', 'Science'],
+      answers: { 0: 1 }, idx: 1, sectionIdx: 0, floorIdx: 0,
+      endTime: Date.now() - 3_600_000, sectionEndTime: null, startedAt: 424242, updatedAt: Date.now() - 3_600_000, ...over,
+    })
+    const open = async (run: object | null) => {
+      mockSearchParams = { subtest: 'all', mode: 'full' }
+      mockQuestionRows = [mk('M1', 'Mathematics'), mk('M2', 'Mathematics'), mk('S1', 'Science'), mk('S2', 'Science')]
+      mockLoadRun.mockResolvedValue(run)
+      render(<UpcatExam />)
+    }
+    const lastRun = () => mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0]
+
+    it('offers Submit / Discard instead of Resume, and never auto-submits', async () => {
+      await open(saved())
+      expect(await screen.findByText('Submit what I answered')).toBeTruthy()
+      expect(screen.getByText('Discard')).toBeTruthy()
+      expect(screen.queryByText('Resume where you left off')).toBeNull()
+      expect(mockRecordAttempts).not.toHaveBeenCalled()
+    })
+
+    it('Submit writes only reached questions, once, under the saved start; results agree', async () => {
+      await open(saved())
+      fireEvent.press(await screen.findByText('Submit what I answered'))
+      expect(await screen.findByText('Practice complete.')).toBeTruthy()
+      expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
+      const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
+      expect(rows.map(r => [r.questionId, r.selectedIndex, r.sessionKey])).toEqual([['M1', 1, 424242], ['M2', null, 424242]])
+      expect(mockRecordSession).toHaveBeenCalledTimes(1) // Science was never reached
+      expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({
+        subtest: 'Mathematics', score: 1, total: 2, startTime: 424242, attemptKey: 424242,
+      }))
+      expect(screen.getByText('1 of 2 correct')).toBeTruthy()
+      expect(screen.queryByLabelText('Science score')).toBeNull()
+      expect(screen.getByText('Review 1 answer')).toBeTruthy()
+      expect(screen.getByText('Questions you never reached are not counted.')).toBeTruthy()
+    })
+
+    it('a failed stale submit is not retried by the timer', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const rowsSpy = jest.spyOn(require('../../../../utils/attemptRows'), 'buildAttemptRows')
+        .mockImplementationOnce(() => { throw new Error('boom') })
+      try {
+        await open(saved())
+        fireEvent.press(await screen.findByText('Submit what I answered'))
+        await waitFor(() => expect(rowsSpy).toHaveBeenCalledTimes(1))
+        await act(async () => { await new Promise(r => setTimeout(r, 1500)) })
+        expect(rowsSpy).toHaveBeenCalledTimes(1)
+        expect(mockClearRun).not.toHaveBeenCalled()
+      } finally {
+        rowsSpy.mockRestore()
+        warnSpy.mockRestore()
+      }
+    })
+
+    it('an empty stale run counts only the position it was on, like the diagnostic', async () => {
+      await open(saved({ answers: {}, idx: 0 }))
+      fireEvent.press(await screen.findByText('Submit what I answered'))
+      expect(await screen.findByText('Practice complete.')).toBeTruthy()
+      expect((mockRecordAttempts.mock.calls[0]![0] as any[]).map(r => r.questionId)).toEqual(['M1'])
+    })
+
+    it('Discard clears the run and starts a fresh sitting with its own start time', async () => {
+      await open(saved())
+      fireEvent.press(await screen.findByText('Discard'))
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      expect(mockClearRun).toHaveBeenCalledWith('upcat:all:full')
+      expect(lastRun().startedAt).toBeGreaterThan(424242)
+      expect(mockRecordAttempts).not.toHaveBeenCalled()
+    })
+
+    it('resuming a live run keeps its start time', async () => {
+      await open(saved({ endTime: Date.now() + 600_000 }))
+      fireEvent.press(await screen.findByText('Resume where you left off'))
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      expect(lastRun().startedAt).toBe(424242)
+    })
+
+    it('Start over gets a start time later than mount', async () => {
+      await open(saved({ endTime: Date.now() + 600_000 }))
+      const button = await screen.findByText('Start over')
+      await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+      const t0 = Date.now()
+      fireEvent.press(button)
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      expect(lastRun().startedAt).toBeGreaterThanOrEqual(t0)
+    })
+
+    it('an early submit of a live run does not record the unreached questions', async () => {
+      await open(null)
+      await waitFor(() => expect(screen.getByText('M1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('2'))
+      fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
+      fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+      const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+      await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
+      expect((mockRecordAttempts.mock.calls[0]![0] as any[]).map(r => r.questionId)).toEqual(['M1'])
+    })
+  })
+
+  it('Leave with nothing to go back to confirms, then goes to the home route', async () => {
+    mockCanGoBack = false
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByRole('button', { name: 'Leave exam' }))
+    expect(alertSpy).toHaveBeenCalledWith('Leave the exam?', 'Your progress is saved.', expect.any(Array))
+    expect(mockReplace).not.toHaveBeenCalled()
+    const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+    await act(async () => { buttons.find(b => b.text === 'Leave')!.onPress!() })
+    expect(mockReplace).toHaveBeenCalledTimes(1)
+    expect(mockReplace).toHaveBeenCalledWith('/practice/exam')
+    expect(mockRouterBack).not.toHaveBeenCalled()
   })
 })
 

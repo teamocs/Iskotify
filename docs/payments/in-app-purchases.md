@@ -141,7 +141,7 @@ All are server-only. Never put them in the app or in Git.
 | `EXPO_PUBLIC_PAYWALL_ENABLED` | `1` (limits + upgrade screen on) |
 | `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | `goog_…` public SDK key (Android build only) |
 
-Then build Android **1.9.0** (production profile builds an `.aab`) and upload to
+Then build Android (production profile builds an `.aab`) and upload to
 the Play testing track. Old OTA updates cannot reach the new build (runtime
 version follows the app version), and the new code cannot reach old builds.
 
@@ -190,7 +190,7 @@ Our Terms promise refunds where the law gives a right to one; never write "no re
 ```sql
 select id, provider, type, amount_centavos, payload, received_at
 from public.payment_events
-where user_id is null
+where payload ? 'review_reason' or processed_at is null or user_id is null
 order by received_at desc;
 ```
 Check the PayMongo session in their dashboard, then grant manually if genuine.
