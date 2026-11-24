@@ -11,6 +11,7 @@ import DiagnosticExam from '../index'
 const mockPush = jest.fn()
 const mockReplace = jest.fn()
 const mockBack = jest.fn()
+let mockCanGoBack = true
 let mockSearchParams: { subject?: string | string[]; exam?: string | string[] } = {}
 
 // Batch D: which exam the diagnostic samples is resolved from the focus list +
@@ -37,7 +38,7 @@ jest.mock('../../../../services/practiceSignals', () => ({
 }))
 
 jest.mock('expo-router', () => ({
-  router: { push: (...a: unknown[]) => mockPush(...a), replace: (...a: unknown[]) => mockReplace(...a), back: () => mockBack() },
+  router: { push: (...a: unknown[]) => mockPush(...a), replace: (...a: unknown[]) => mockReplace(...a), back: () => mockBack(), canGoBack: () => mockCanGoBack },
   useLocalSearchParams: () => mockSearchParams,
 }))
 
@@ -112,6 +113,7 @@ describe('DiagnosticExam', () => {
     mockPush.mockReset()
     mockReplace.mockReset()
     mockBack.mockReset()
+    mockCanGoBack = true
     mockRecordSession.mockClear()
     mockRecordAttempts.mockClear()
     mockUsePreventLeave.mockClear()
@@ -319,6 +321,21 @@ describe('DiagnosticExam', () => {
   })
 
   // ── Fix 1: leave-confirmation + persistence ────────────────────────────────
+  it.each([['member', '/(tabs)'], ['guest', '/try']] as const)('Leave with nothing to go back to confirms, then goes home (%s)', async (mode, home) => {
+    mockCanGoBack = false
+    mockGuest = { mode, catalogReady: true }
+    mockSearchParams = { subject: 'Mathematics' }
+    render(<DiagnosticExam />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Leave exam' }))
+    expect(alertSpy).toHaveBeenCalledWith('Leave the exam?', 'Your progress is saved.', expect.any(Array))
+    expect(mockReplace).not.toHaveBeenCalled()
+    const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+    await act(async () => { buttons.find(b => b.text === 'Leave')!.onPress!() })
+    expect(mockReplace).toHaveBeenCalledTimes(1)
+    expect(mockReplace).toHaveBeenCalledWith(home)
+    expect(mockBack).not.toHaveBeenCalled()
+  })
+
   it('Fix 1: guards leaving mid-exam and lets router.back() through once confirmed', async () => {
     mockSearchParams = { subject: 'Science' }
     mockBankRows = [

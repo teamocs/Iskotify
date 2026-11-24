@@ -10,8 +10,10 @@ import type { RawUpcatQuestion } from '../../../../utils/upcatExam'
 // lives in slug.test.tsx / slug.focus.test.tsx.
 
 const mockRouterBack = jest.fn()
+const mockRouterReplace = jest.fn()
+let mockCanGoBack = true
 jest.mock('expo-router', () => ({
-  router: { push: () => {}, replace: () => {}, back: (...a: unknown[]) => mockRouterBack(...a) },
+  router: { push: () => {}, replace: (...a: unknown[]) => mockRouterReplace(...a), back: (...a: unknown[]) => mockRouterBack(...a), canGoBack: () => mockCanGoBack },
   useLocalSearchParams: () => ({ slug: 'test-mock' }),
 }))
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: ({ children }: any) => children }))
@@ -70,6 +72,7 @@ describe('BlueprintExam: Batch B', () => {
     // jump still advance it explicitly.
     jest.useFakeTimers()
     mockRecordSession.mockClear(); mockRecordAttempts.mockClear(); mockRouterBack.mockClear()
+    mockRouterReplace.mockClear(); mockCanGoBack = true
     mockSaveRun.mockClear(); mockLoadRun.mockClear().mockResolvedValue(null); mockClearRun.mockClear()
     mockGetExamBlueprint.mockResolvedValue(BLOCKED)
     mockGetQuestionsByCategory.mockResolvedValue(new Map([['a', [A1, A2]], ['b', [B1, B2]]]))
@@ -337,6 +340,118 @@ describe('BlueprintExam: Batch B', () => {
       await waitFor(() => expect(screen.getByText('B2?')).toBeTruthy())
       await waitFor(() => expect(lastSaved().sectionIdx).toBe(0))
       expect(lastSaved().floorIdx).toBe(0)
+    })
+  })
+
+  describe('restoring a run whose section left the blueprint', () => {
+    const saved = (over: object = {}) => ({
+      runKey: 'exam:test-mock', kind: 'exam', slug: 'test-mock', mode: 'full',
+      questionIds: ['A2', 'A1', 'B2', 'B1'], sectionNames: ['Gone', 'Gone', 'Science', 'Science'],
+      answers: { 0: 1, 3: 2 }, idx: 3, sectionIdx: 1, floorIdx: 2,
+      endTime: Date.now() + 14 * 60_000, sectionEndTime: Date.now() + 9 * 60_000, startedAt: Date.now() - 60_000, updatedAt: Date.now(), ...over,
+    })
+    const resume = async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+      fireEvent.press(screen.getByText('Resume where you left off'))
+    }
+    const lastSaved = () => mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0]
+
+    it.each([
+      ['not section-blocked', { sectionBlocked: false }, {}],
+      ['sprint', {}, { mode: 'sprint', sectionIdx: 0, floorIdx: 0, sectionEndTime: null }],
+    ])('keeps every question and answer when sections are not locked (%s)', async (_n, bpOver, runOver) => {
+      mockGetExamBlueprint.mockResolvedValue({ ...BLOCKED, ...bpOver })
+      mockLoadRun.mockResolvedValue(saved(runOver))
+      await resume()
+      await waitFor(() => expect(screen.getByText('Question 4 of 4')).toBeTruthy())
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      expect(lastSaved()).toMatchObject({ questionIds: ['A2', 'A1', 'B2', 'B1'], answers: { 0: 1, 3: 2 }, idx: 3 })
+    })
+
+    it('section-blocked: keeps only the questions of surviving sections, remapped', async () => {
+      mockGetExamBlueprint.mockResolvedValue({ ...BLOCKED, sections: [BLOCKED.sections[0]!, BLOCKED.sections[1]!] })
+      mockLoadRun.mockResolvedValue(saved())
+      await resume()
+      await waitFor(() => expect(screen.getByText('B1?')).toBeTruthy())
+      expect(screen.getByText('Question 2 of 2')).toBeTruthy()
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      expect(lastSaved()).toMatchObject({ questionIds: ['B2', 'B1'], sectionNames: ['Science', 'Science'], answers: { 1: 2 }, idx: 1, floorIdx: 0 })
+    })
+
+    it('stays in the section the student was in when an earlier one of three is gone', async () => {
+      const C1 = mkQ('C1', 'C1?')
+      mockGetExamBlueprint.mockResolvedValue({ ...BLOCKED, sections: [sec('s0', 'Math', 'a', 2, 5, 0), sec('s2', 'Science', 'b', 2, 10, 1), sec('s3', 'English', 'c', 1, 5, 2)] })
+      mockGetQuestionsByCategory.mockResolvedValue(new Map([['a', [A1, A2]], ['b', [B1, B2]], ['c', [C1]]]))
+      mockLoadRun.mockResolvedValue(saved({
+        questionIds: ['A2', 'A1', 'B2', 'B1', 'C1'], sectionNames: ['Gone', 'Gone', 'Science', 'Science', 'English'],
+      }))
+      await resume()
+      await waitFor(() => expect(screen.getByText('B1?')).toBeTruthy())
+      expect(lastSaved()).toMatchObject({ sectionIdx: 0, floorIdx: 0, idx: 1 })
+    })
+
+    it('with no surviving section there is nothing to resume: cleared, still on the prestart', async () => {
+      mockLoadRun.mockResolvedValue(saved({ sectionNames: ['Gone', 'Gone', 'Gone', 'Gone'] }))
+      await resume()
+      expect(mockClearRun).toHaveBeenCalledWith('exam:test-mock')
+      await waitFor(() => expect(screen.queryByText('Resume where you left off')).toBeNull())
+      expect(screen.getByText('Full Mock')).toBeTruthy()
+      expect(mockSaveRun).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('starting the other mode over a saved run', () => {
+    const open = async (mode: string, endTime = Date.now() + 600_000) => {
+      mockLoadRun.mockResolvedValue({
+        runKey: 'exam:test-mock', kind: 'exam', slug: 'test-mock', mode,
+        questionIds: ['A2', 'A1', 'B2', 'B1'], sectionNames: ['Math', 'Math', 'Science', 'Science'],
+        answers: { 0: 1 }, idx: 0, sectionIdx: 0, floorIdx: 0,
+        endTime, sectionEndTime: null, startedAt: 1, updatedAt: 1,
+      })
+      render(<BlueprintExam />)
+      await screen.findByText(endTime === 1 ? 'Discard' : 'Resume where you left off')
+    }
+    it.each([
+      ['full', /Study Sprint/, 'sprint', undefined],
+      ['full', /Study Sprint/, 'sprint', 1],
+      ['sprint', /^Full Mock$/, 'full', undefined],
+    ])('a saved %s run is only replaced after a confirm (%s, %s, endTime %s)', async (mode, button, started, endTime) => {
+      await open(mode, endTime)
+      fireEvent.press(screen.getByText(button))
+      expect(alertSpy).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Full Mock')).toBeTruthy()
+      expect(mockSaveRun).not.toHaveBeenCalled()
+      await confirmLast()
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      expect(mockSaveRun.mock.calls[0]![0].mode).toBe(started)
+    })
+    it('the same mode starts straight away, as before', async () => {
+      await open('full')
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      expect(alertSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('nothing to go back to (reload or deep link)', () => {
+    it('Leave confirms, then goes to the mock exams list', async () => {
+      mockCanGoBack = false
+      await startFull()
+      fireEvent.press(screen.getByRole('button', { name: 'Leave exam' }))
+      expect(alertSpy).toHaveBeenCalledWith('Leave the exam?', 'Your progress is saved.', expect.any(Array))
+      expect(mockRouterReplace).not.toHaveBeenCalled()
+      await confirmLast()
+      expect(mockRouterReplace).toHaveBeenCalledTimes(1)
+      expect(mockRouterReplace).toHaveBeenCalledWith('/practice/exam')
+      expect(mockRouterBack).not.toHaveBeenCalled()
+    })
+    it('Back on the prestart goes to the mock exams list', async () => {
+      mockCanGoBack = false
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+      expect(mockRouterReplace).toHaveBeenCalledWith('/practice/exam')
     })
   })
 

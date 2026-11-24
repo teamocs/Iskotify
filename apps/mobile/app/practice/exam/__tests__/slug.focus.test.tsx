@@ -14,7 +14,7 @@ import { aria } from '../../../../test-utils/aria'
 const mockRouterBack = jest.fn()
 const mockRouterReplace = jest.fn()
 jest.mock('expo-router', () => ({
-  router: { push: () => {}, replace: (...a: unknown[]) => mockRouterReplace(...a), back: (...a: unknown[]) => mockRouterBack(...a) },
+  router: { push: () => {}, replace: (...a: unknown[]) => mockRouterReplace(...a), back: (...a: unknown[]) => mockRouterBack(...a), canGoBack: () => true },
   useLocalSearchParams: () => ({ slug: 'test-mock' }),
 }))
 

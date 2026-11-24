@@ -48,6 +48,7 @@ import { decorative, focusRing, type WebPressableState } from '../../../componen
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius, iosTextStyle } from '../../../theme/tokens'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
+import { goBackOr } from '../../../components/explore/DetailTopBar'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
@@ -59,6 +60,9 @@ import { UpgradeCard, FULL_MOCK_CAP_BODY } from '../../../components/premium/Upg
 import { lastSeenOrEmpty } from '../../../services/questionHistory'
 import { isRunActive, type RunnerEvent } from '../../../utils/runnerReducer'
 import { useRunner } from '../../../hooks/useRunner'
+
+/** Where Leave / Back go when there is no history (web reload, deep link). */
+const EXAM_HOME = '/practice/exam'
 
 /** A flattened exam question that remembers which section it belongs to. */
 interface FlatQuestion { q: ExamQuestion; sectionName: string }
@@ -94,7 +98,7 @@ function BackButton({ label = 'Back' }: { label?: string }) {
   const { theme: t } = useTheme()
   return (
     <Pressable
-      onPress={() => router.back()}
+      onPress={() => goBackOr(EXAM_HOME)}
       accessibilityRole="button"
       accessibilityLabel={label}
       style={(state) => {
@@ -449,18 +453,22 @@ export default function BlueprintExam() {
   // action) behind a confirmation while a run is in progress. If the timer
   // submitted while the dialog was open, CONFIRM_LEAVE is refused and nothing
   // guards leaving any more: just go.
-  usePreventLeave(running && !leaving, () => {
+  const confirmLeave = () => {
     confirmAction(
       'Leave the exam?',
       'Your progress is saved.',
       'Leave',
-      () => { if (!send('CONFIRM_LEAVE')) router.back() },
+      () => { if (!send('CONFIRM_LEAVE')) goBackOr(EXAM_HOME) },
       { cancelLabel: 'Stay', destructive: true },
     )
-  })
+  }
+  usePreventLeave(running && !leaving, confirmLeave)
   useEffect(() => {
-    if (leaving) router.back()
+    if (leaving) goBackOr(EXAM_HOME)
   }, [leaving])
+  // After a web reload or deep link there is no back entry, so router.back() never
+  // reaches the guard above: ask here.
+  const leave = () => { if (running && !router.canGoBack()) confirmLeave(); else goBackOr(EXAM_HOME) }
   // Review finding #3: web-only tab-close warning + immediate persist flush.
   useBeforeUnloadWarning(runActive)
 
@@ -477,20 +485,26 @@ export default function BlueprintExam() {
     if (!blueprint || !run) return false
     const allRaw = Array.from(poolsRef.current.values()).flat()
     const orderedRaw = reorderByIds<RawUpcatQuestion, 'questionId'>(allRaw, run.questionIds, 'questionId')
-    if (orderedRaw.length === 0) {
+    const passageById = new Map(passagesRef.current.map(p => [p.setId, p.passageText]))
+    const sectionByQuestionId = new Map(run.questionIds.map((id, i) => [id, run.sectionNames[i] ?? '']))
+    const ordered: FlatQuestion[] = orderedRaw.map(q => ({
+      q: { ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null },
+      sectionName: sectionByQuestionId.get(q.questionId) ?? '',
+    }))
+    const rebuilt = reconstructBuiltExamFromRun<BlueprintSection, ExamQuestion>(blueprint.sections, ordered)
+    // Section-locked runs keep only the sections the blueprint still has, so the flat
+    // list and the section bounds line up. Other runs have no bounds: nothing is dropped.
+    const sectionLocked = run.mode !== 'sprint' && blueprint.sectionBlocked
+    const flat: FlatQuestion[] = sectionLocked
+      ? rebuilt.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
+      : ordered
+    if (flat.length === 0) {
       // Nothing left to resume (e.g. every sampled question was unpublished since).
       void clearRun(run.runKey)
       setResumeAvailable(false)
       setResumeStale(false)
       return false
     }
-    const passageById = new Map(passagesRef.current.map(p => [p.setId, p.passageText]))
-    const sectionByQuestionId = new Map(run.questionIds.map((id, i) => [id, run.sectionNames[i] ?? '']))
-    const flat: FlatQuestion[] = orderedRaw.map(q => ({
-      q: { ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null },
-      sectionName: sectionByQuestionId.get(q.questionId) ?? '',
-    }))
-    const rebuilt = reconstructBuiltExamFromRun<BlueprintSection, ExamQuestion>(blueprint.sections, flat)
     setBuilt(rebuilt)
     setExamMode(run.mode === 'sprint' ? 'sprint' : 'full')
     setQuestions(flat)
@@ -503,13 +517,15 @@ export default function BlueprintExam() {
     let restoredIdx = remapSingleIndex(run.questionIds, newIds, run.idx)
     let restoredFloor = remapSingleIndex(run.questionIds, newIds, run.floorIdx)
     let restoredSection = run.sectionIdx
-    if (run.mode !== 'sprint' && blueprint.sectionBlocked) {
+    if (sectionLocked) {
       // A shorter rebuilt exam can have fewer sections than the saved one. An index past
       // the end would leave no section ceiling (free navigation), silently lifting the
       // lock, so pin the section into range and the position inside that section.
       const rb = computeBounds(rebuilt, null)
       if (rb.length > 0) {
-        restoredSection = Math.max(0, Math.min(run.sectionIdx, rb.length - 1))
+        // By name first: a dropped earlier section shifts every later index.
+        const named = rb.findIndex(b => b.name === run.sectionNames[run.floorIdx])
+        restoredSection = named >= 0 ? named : Math.max(0, Math.min(run.sectionIdx, rb.length - 1))
         const cur = rb[restoredSection]!
         restoredFloor = Math.max(cur.start, Math.min(restoredFloor, cur.end - 1))
         restoredIdx = Math.max(restoredFloor, Math.min(restoredIdx, cur.end - 1))
@@ -591,6 +607,19 @@ export default function BlueprintExam() {
       setSectionEndTime(now + first.timeMinutes * 60_000)
     }
     send('START')
+  }
+
+  /** One saved run per exam: starting the other mode replaces it, so ask first. */
+  function requestStart(mode: 'full' | 'sprint') {
+    const savedMode = savedRunRef.current?.mode === 'sprint' ? 'sprint' : 'full'
+    if (!resumeAvailable || savedMode === mode) { startExam(mode); return }
+    confirmAction(
+      mode === 'sprint' ? 'Start a Study Sprint?' : 'Start a Full Mock?',
+      `Your saved ${savedMode === 'sprint' ? 'Study Sprint' : 'Full Mock'} will be replaced and its answers lost.`,
+      'Start',
+      () => startExam(mode),
+      { destructive: true },
+    )
   }
 
   async function submit() {
@@ -798,7 +827,7 @@ export default function BlueprintExam() {
           title="This mock isn't ready yet"
           body={`${blueprint?.name ?? 'This mock exam'}'s questions are still being written. Check back soon, or practise a subject in the meantime.`}
           actionLabel="Back to mock exams"
-          onAction={() => router.back()}
+          onAction={() => goBackOr(EXAM_HOME)}
         />
       </Screen>
     )
@@ -915,7 +944,7 @@ export default function BlueprintExam() {
                 size={resumeAvailable ? 'md' : 'lg'}
                 fullWidth
                 disabled={noItems}
-                onPress={() => startExam('full')}
+                onPress={() => requestStart('full')}
                 accessibilityHint={resumeAvailable ? 'Starts a new attempt instead of resuming' : undefined}
               />
             )}
@@ -924,7 +953,7 @@ export default function BlueprintExam() {
               variant="secondary"
               fullWidth
               disabled={noItems}
-              onPress={() => startExam('sprint')}
+              onPress={() => requestStart('sprint')}
             />
           </View>
         </View>
@@ -1117,7 +1146,7 @@ export default function BlueprintExam() {
           answered={answeredIdxs.size}
           remaining={remaining}
           sectionRemaining={sectionBlocked ? sectionRemaining : null}
-          onLeave={() => router.back()}
+          onLeave={leave}
           onFlag={() => setReportIdx(idx)}
           flagged={!!reported[idx]}
         />

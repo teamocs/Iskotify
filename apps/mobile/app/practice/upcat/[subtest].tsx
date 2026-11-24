@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { View, ScrollView } from 'react-native'
+import { View, Text, ScrollView } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -29,15 +29,17 @@ import { PageTitle } from '../../../components/ui/PageTitle'
 import { Button } from '../../../components/ui/Button'
 import { ResultsBreakdown } from '../../../components/practice/ResultsBreakdown'
 import { resultCounts, reviewAnswersLabel } from '../../../components/practice/resultsCopy'
-import { DetailTopBar } from '../../../components/explore/DetailTopBar'
-import { spacing } from '../../../theme/tokens'
+import { DetailTopBar, goBackOr } from '../../../components/explore/DetailTopBar'
+import { isReached } from '../../../utils/examSubmit'
+import { useTheme } from '../../../theme/ThemeContext'
+import { spacing, iosTextStyle } from '../../../theme/tokens'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { upcatDrillKind } from '../../../utils/sessionKind'
-import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
+import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex, isRunExpired } from '../../../utils/examRunPersistence'
 import { practiceAllowanceNow, fullMockAllowedNow } from '../../../services/premiumGate'
 import { usePremium } from '../../../hooks/usePremium'
 import { trimToAllowance } from '../../../utils/premiumLimits'
@@ -64,6 +66,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   const mode = isMistakes ? 'quick' : params.mode
   const homeHref = isMistakes ? '/practice' : '/practice/exam'
   const db = useDb()
+  const { theme: t } = useTheme()
   // Redesign M3: the question navigator is a side panel on expanded widths and
   // a sheet (opened from the header) everywhere else.
   const expanded = useBreakpoint() === 'expanded'
@@ -89,7 +92,14 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   // Post-session Estimated Admission Score delta (only set when the student
   // was already "ready" — four subtests unlocked — both before and after).
   const [scoreDelta, setScoreDelta] = useState<string | null>(null)
-  const startRef = useState(() => Date.now())[0]
+  // Sitting start (ms): reset when a run starts and restored from the saved run on
+  // resume, so duration and the attempt key describe the real sitting.
+  const [startedAt, setStartedAt] = useState(() => Date.now())
+  // Indexes the student has actually seen; unreached questions are not written as attempts.
+  const visitedRef = useRef<Set<number>>(new Set())
+  // The saved run's time already ran out: offer Submit / Discard instead of Resume.
+  const [resumeStale, setResumeStale] = useState(false)
+  const [submitStale, setSubmitStale] = useState(false)
   // Fix 1: resume-in-progress-run state.
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
   const parsedRef = useRef<RawUpcatQuestion[]>([])
@@ -135,6 +145,9 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
       timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
     }
   }, [idx])
+  useEffect(() => {
+    if (runActive) visitedRef.current.add(idx)
+  }, [runActive, idx])
 
   function parseOptions(raw: string | null | undefined): string[] {
     try {
@@ -189,6 +202,8 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     }
     if (!canStart()) return
     setQuestions(built)
+    setStartedAt(Date.now())
+    visitedRef.current = new Set()
     prefetchSessionImages(built) // fire-and-forget; never blocks session start
     if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
     send(built.length ? 'START' : 'UNAVAILABLE')
@@ -247,6 +262,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         const run = await loadRun(runKey)
         if (run && run.questionIds.length > 0) {
           savedRunRef.current = run
+          setResumeStale(isRunExpired(run, Date.now()))
           send('READY')
           return
         }
@@ -263,17 +279,17 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   }, [db, subtestParam, mode, loadAttempt, isMistakes])
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
-   *  run's question ids, restoring answers/position/timer. The absolute-
-   *  timestamp countdown effect below correctly auto-submits if the whole
-   *  thing already expired while the app was closed. */
-  function resumeExam() {
+   *  run's question ids, restoring answers/position/timer. A run whose time
+   *  already ran out never gets here through "Resume": the prompt offers
+   *  Submit / Discard instead. */
+  function restoreRun(): boolean {
     const run = savedRunRef.current
-    if (!run) return
+    if (!run) return false
     const ordered = reorderByIds<RawUpcatQuestion, 'questionId'>(parsedRef.current, run.questionIds, 'questionId')
     if (ordered.length === 0) {
       void clearRun(run.runKey)
       void buildFreshExam()
-      return
+      return false
     }
     const passageById = new Map(rawPassagesRef.current.map(p => [p.setId, p.passageText]))
     const built: ExamQuestion[] = ordered.map(q => ({ ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null }))
@@ -283,9 +299,23 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     // indices no longer point at the same questions.
     const newIds = built.map(q => q.questionId)
     setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
-    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
+    const restoredIdx = remapSingleIndex(run.questionIds, newIds, run.idx)
+    setIdx(restoredIdx)
     setEndTime(run.endTime)
+    setStartedAt(run.startedAt)
+    // Reached = answered, or visited up to the saved position.
+    const reached = new Set<number>(Object.keys(remapIndexedById(run.questionIds, newIds, run.answers)).map(Number))
+    for (let i = 0; i <= restoredIdx; i++) reached.add(i)
+    visitedRef.current = reached
     send('START')
+    return true
+  }
+
+  function resumeExam() { restoreRun() }
+
+  /** "Submit what I answered" on a run whose time ran out: restore it, then submit it as it stands. */
+  function submitStaleRun() {
+    if (restoreRun()) setSubmitStale(true)
   }
 
   function startOver() {
@@ -312,24 +342,28 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
       floorIdx: 0,
       endTime,
       sectionEndTime: null,
-      startedAt: startRef,
+      startedAt,
     }).catch(err => console.warn('[practice/upcat/[subtest]] saveRun failed:', err))
-  }, [running, runKey, subtestParam, mode, questions, answers, idx, endTime, startRef, saveRun])
+  }, [running, runKey, subtestParam, mode, questions, answers, idx, endTime, startedAt, saveRun])
 
   // Fix 1: leave-confirmation while running. If the timer submitted while the dialog
   // was open, CONFIRM_LEAVE is refused and nothing guards leaving any more: just go.
-  usePreventLeave(running && !leaving, () => {
+  const confirmLeave = () => {
     confirmAction(
       'Leave the exam?',
       'Your progress is saved.',
       'Leave',
-      () => { if (!send('CONFIRM_LEAVE')) router.back() },
+      () => { if (!send('CONFIRM_LEAVE')) goBackOr(homeHref) },
       { cancelLabel: 'Stay', destructive: true },
     )
-  })
+  }
+  usePreventLeave(running && !leaving, confirmLeave)
   useEffect(() => {
-    if (leaving) router.back()
-  }, [leaving])
+    if (leaving) goBackOr(homeHref)
+  }, [leaving, homeHref])
+  // After a web reload or deep link there is no back entry, so router.back() never
+  // reaches the guard above: ask here.
+  const leave = () => { if (running && !router.canGoBack()) confirmLeave(); else goBackOr(homeHref) }
   // Review finding #3: web-only tab-close warning + immediate persist flush.
   useBeforeUnloadWarning(runActive)
 
@@ -348,9 +382,14 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     }
   }
 
+  /** Scored over REACHED questions only, the same set as the attempt rows. */
+  function scoreReached() {
+    return scoreExam(questions.flatMap((q, i) => isReached(i, answers, visitedRef.current)
+      ? [{ subtest: q.subtest, correct: answers[i] === q.correctIndex }] : []))
+  }
+
   async function submitRun() {
-    const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
-    const result = scoreExam(scored)
+    const result = scoreReached()
 
     // Post-session delta: snapshot the on-device estimate before this
     // session's attempts are written. Best-effort — must never block
@@ -366,7 +405,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     // they're committed before recordSession's fire-and-forget backup push.
     const elapsedByIdx = timingRef.current ? finalizeTiming(timingRef.current, Date.now()) : {}
     const rows = buildAttemptRows({
-      sessionKey: startRef,
+      sessionKey: startedAt,
       sourceTable: 'upcat_questions',
       listingSlug: 'upcat',
       questions: questions.map(q => ({
@@ -377,6 +416,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
       })),
       answers,
       elapsedByIdx,
+      reached: visitedRef.current,
     })
 
     // Fix 1: run finished — stop offering "Resume" for a completed attempt. Only
@@ -403,10 +443,10 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         deckId: '',
         score: b.correct,
         total: b.total,
-        startTime: startRef,
+        startTime: startedAt,
         subtest: st,
         kind: upcatDrillKind(subtestParam, mode),
-        attemptKey: startRef,
+        attemptKey: startedAt,
       }).catch(err => console.warn('[practice/upcat/[subtest]] recordSession failed:', err))
     }
 
@@ -426,6 +466,15 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   // accurate; auto-submits ONCE when it reaches zero. If that submit fails, the
   // timer does not retry every second; the student retries from the review sheet.
   const timerSubmittedRef = useRef(false)
+  // "Submit what I answered" on an expired run: submit once the restored run is up
+  // (it counts as the timer's submit). Declared BEFORE the countdown effect so the
+  // run is already submitting when that runs.
+  useEffect(() => {
+    if (!running || !submitStale) return
+    setSubmitStale(false)
+    timerSubmittedRef.current = true
+    void submitRef.current()
+  }, [running, submitStale])
   useEffect(() => {
     if (!running || endTime == null) return
     const tick = () => {
@@ -483,12 +532,23 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     return (
       <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <PageTitle
-          title="Resume where you left off?"
-          lead="You have an in-progress attempt. Your answers and timer were saved."
+          title={resumeStale ? 'Your last attempt ran out of time' : 'Resume where you left off?'}
+          lead={resumeStale
+            ? 'You can submit the answers you gave (questions you never reached are not counted), or discard that attempt and start fresh.'
+            : 'You have an in-progress attempt. Your answers and timer were saved.'}
         />
         <View style={{ gap: spacing.sm }}>
-          <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
-          <Button label="Start over" variant="secondary" fullWidth onPress={startOver} />
+          {resumeStale ? (
+            <>
+              <Button label="Submit what I answered" onPress={submitStaleRun} fullWidth size="lg" />
+              <Button label="Discard" variant="secondary" fullWidth onPress={startOver} />
+            </>
+          ) : (
+            <>
+              <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
+              <Button label="Start over" variant="secondary" fullWidth onPress={startOver} />
+            </>
+          )}
         </View>
       </Screen>
     )
@@ -527,13 +587,13 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   }
 
   if (run.status === 'results') {
-    const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
-    const res = scoreExam(scored)
+    const res = scoreReached()
+    const unreached = questions.length - res.overall.total
     const pct = res.overall.total ? Math.round((res.overall.correct / res.overall.total) * 100) : 0
-    const counts = resultCounts(questions, answers)
+    const counts = resultCounts(questions, answers, i => isReached(i, answers, visitedRef.current))
     const label = subtestParam === 'all' ? 'the full mock' : (subtestParam ?? 'this subtest')
     // Mistakes mode counts only the missed questions (not their passage-set companions).
-    const missed = questions.filter(q => mistakeIds.has(q.questionId))
+    const missed = questions.filter((q, i) => mistakeIds.has(q.questionId) && isReached(i, answers, visitedRef.current))
     const fixed = missed.filter(q => answers[questions.indexOf(q)] === q.correctIndex).length
     return (
       <Screen>
@@ -562,6 +622,11 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
               name: st, correct: b.correct, total: b.total, pct: b.total ? Math.round((b.correct / b.total) * 100) : 0,
             }))}
           />
+          {unreached > 0 ? (
+            <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
+              Questions you never reached are not counted.
+            </Text>
+          ) : null}
 
           <RunnerReview
             items={questions.map(q => ({
@@ -622,7 +687,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
           total={questions.length}
           answered={answeredIdxs.size}
           remaining={remaining}
-          onLeave={() => router.back()}
+          onLeave={leave}
           onFlag={() => setReportIdx(idx)}
           flagged={!!reported[idx]}
         />
