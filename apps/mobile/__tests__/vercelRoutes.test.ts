@@ -41,3 +41,14 @@ describe('vercel.json web routing', () => {
     expect(config.rewrites).toEqual(expect.arrayContaining([{ source, destination }]))
   })
 })
+
+// Comparing with HEAD^ skips the build when a later commit does not touch the app,
+// even if the live deployment is several commits behind (Nov 2026: the web app
+// stayed on an older commit after builds finished out of order).
+describe('vercel.json ignoreCommand', () => {
+  it.each(['mobile', 'admin'])('%s compares with the last deployed commit', app => {
+    const file = path.join(root, '..', app, 'vercel.json')
+    const { ignoreCommand } = JSON.parse(fs.readFileSync(file, 'utf8')) as { ignoreCommand: string }
+    expect(ignoreCommand).toContain('git diff --quiet ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD')
+  })
+})
