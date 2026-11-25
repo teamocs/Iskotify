@@ -653,6 +653,26 @@ export default function ProfileScreen() {
           />
         ) : null}
         <InsetRow
+          title="Sign Out"
+          subtitle="Sign out on this device"
+          icon={ExitOutlined}
+          iconTone="danger"
+          destructive
+          chevron={false}
+          onPress={handleSignOut}
+        />
+      </InsetGroup>
+
+      <InsetGroup header="Help" headerLevel={2} inset={false}>
+        <InsetRow title="Leave feedback" icon={Comment1Outlined} iconTone="neutral" onPress={() => router.push('/settings/leave-feedback')} />
+        <InsetRow title="Report a bug" icon={Bug1Outlined} iconTone="neutral" onPress={() => router.push('/settings/report-bug')} />
+        <InsetRow title="Privacy policy" icon={Shield2Outlined} iconTone="neutral" onPress={() => router.push('/privacy')} />
+        <InsetRow title="Terms of service" icon={ClipboardOutlined} iconTone="neutral" onPress={() => router.push('/terms')} />
+      </InsetGroup>
+
+      {/* The name "Your data" is in the Privacy Policy, the Terms and iskotify.ph/delete-account. */}
+      <InsetGroup header="Your data" headerLevel={2} inset={false} footer="Sign out keeps your progress on this device. Reset and delete cannot be undone.">
+        <InsetRow
           title="Export Data"
           subtitle="Save your preferences as a JSON file"
           icon={Download1Outlined}
@@ -665,25 +685,6 @@ export default function ProfileScreen() {
           icon={Upload1Outlined}
           iconTone="neutral"
           onPress={handleImport}
-        />
-      </InsetGroup>
-
-      <InsetGroup header="Help" headerLevel={2} inset={false}>
-        <InsetRow title="Leave feedback" icon={Comment1Outlined} iconTone="neutral" onPress={() => router.push('/settings/leave-feedback')} />
-        <InsetRow title="Report a bug" icon={Bug1Outlined} iconTone="neutral" onPress={() => router.push('/settings/report-bug')} />
-        <InsetRow title="Privacy policy" icon={Shield2Outlined} iconTone="neutral" onPress={() => router.push('/privacy')} />
-        <InsetRow title="Terms of service" icon={ClipboardOutlined} iconTone="neutral" onPress={() => router.push('/terms')} />
-      </InsetGroup>
-
-      <InsetGroup inset={false} footer="Sign out keeps your progress on this device. Reset and delete cannot be undone.">
-        <InsetRow
-          title="Sign Out"
-          subtitle="Sign out on this device"
-          icon={ExitOutlined}
-          iconTone="danger"
-          destructive
-          chevron={false}
-          onPress={handleSignOut}
         />
         <InsetRow
           title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
