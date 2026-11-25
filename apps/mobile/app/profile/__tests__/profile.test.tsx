@@ -232,7 +232,7 @@ describe('ProfileScreen — empty DB', () => {
     render(<ProfileScreen />)
     await screen.findByText('Student')
     expect(aria(screen.getByRole('header', { name: 'Profile' }), 'aria-level')).toBe(1)
-    for (const name of ['Exams in focus', 'Study', 'Account', 'Help']) {
+    for (const name of ['Exams in focus', 'Study', 'Account', 'Help', 'Your data']) {
       expect(aria(screen.getByRole('header', { name }), 'aria-level')).toBe(2)
     }
   })
@@ -241,7 +241,7 @@ describe('ProfileScreen — empty DB', () => {
   it('groups its rows under Study, Account and Help, then a destructive Sign out', async () => {
     render(<ProfileScreen />)
     await screen.findByText('Student')
-    for (const name of ['Study', 'Account', 'Help']) {
+    for (const name of ['Study', 'Account', 'Help', 'Your data']) {
       expect(screen.getByRole('header', { name })).toBeTruthy()
     }
     const { IconTile } = require('../../../components/ui/InsetGroup')
