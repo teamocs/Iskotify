@@ -39,3 +39,12 @@ describe('sitemap.xml', () => {
     expect((await sitemap()).map(e => e.url)).toContain('https://iskotify.ph/blog')
   })
 })
+
+describe('Google Search Console', () => {
+  it('serves the verification file Google checks for, unchanged', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const file = readFileSync(join(__dirname, '../../public/googlea94ad129c4d317b6.html'), 'utf8')
+    expect(file.trim()).toBe('google-site-verification: googlea94ad129c4d317b6.html')
+  })
+})
